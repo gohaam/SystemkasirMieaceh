@@ -1,0 +1,6 @@
+{
+  "name": "POS Mie Aceh Pak Ismail",
+  "description": "Sistem Kasir dan Point of Sale (POS) modern & profesional untuk Warung Makan Mie Aceh Pak Ismail dengan pemesanan mandiri via scan QR Meja (Self-Ordering), QRIS dinamis, manajemen menu rempah, stok bahan, transaksi cepat, cetak struk, laporan analitik, dan multi-role admin/kasir.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
