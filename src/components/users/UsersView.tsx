@@ -24,6 +24,7 @@ export const UsersView: React.FC = () => {
   // Form state
   const [username, setUsername] = useState('');
   const [name, setName] = useState('');
+  const [phone, setPhone] = useState('');
   const [role, setRole] = useState<Role>('cashier');
   const [pin, setPin] = useState('');
   const [active, setActive] = useState(true);
@@ -32,6 +33,7 @@ export const UsersView: React.FC = () => {
     setEditingUser(null);
     setUsername('');
     setName('');
+    setPhone('');
     setRole('cashier');
     setPin('1234');
     setActive(true);
@@ -42,6 +44,7 @@ export const UsersView: React.FC = () => {
     setEditingUser(user);
     setUsername(user.username);
     setName(user.name);
+    setPhone(user.phone || '');
     setRole(user.role);
     setPin(user.pin || '1234');
     setActive(user.active);
@@ -59,6 +62,7 @@ export const UsersView: React.FC = () => {
       updateUser(editingUser.id, {
         username,
         name,
+        phone,
         role,
         pin,
         active,
@@ -67,6 +71,7 @@ export const UsersView: React.FC = () => {
       addUser({
         username: username.toLowerCase().trim(),
         name,
+        phone,
         role,
         pin,
         active,
@@ -161,6 +166,7 @@ export const UsersView: React.FC = () => {
               <tr className="bg-[#FFFDF7] border-b border-[#E7E5E4] text-[#78716C] font-bold uppercase tracking-wider text-[11px]">
                 <th className="py-3.5 px-4">Nama Lengkap</th>
                 <th className="py-3.5 px-4">Username</th>
+                <th className="py-3.5 px-4">No HP</th>
                 <th className="py-3.5 px-4">Peran (Role)</th>
                 <th className="py-3.5 px-4">Kode PIN</th>
                 <th className="py-3.5 px-4">Status</th>
@@ -184,6 +190,9 @@ export const UsersView: React.FC = () => {
                     </div>
                   </td>
                   <td className="py-3.5 px-4 font-mono text-[#78716C]">@{user.username}</td>
+                  <td className="py-3.5 px-4 text-[#1C1917]">
+                    {user.phone ? user.phone : <span className="text-[#78716C]">-</span>}
+                  </td>
                   <td className="py-3.5 px-4">
                     {user.role === 'admin' ? (
                       <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-amber-100 text-amber-900 border border-amber-200">
@@ -288,17 +297,30 @@ export const UsersView: React.FC = () => {
 
               <div>
                 <label className="block font-bold text-[#1C1917] uppercase tracking-wider mb-1">
-                  Peran (Role):
+                  No HP / WhatsApp:
                 </label>
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as Role)}
-                  className="w-full bg-[#FFFDF7] border border-[#E7E5E4] rounded-xl px-3 py-2 text-xs font-semibold text-[#1C1917] focus:border-[#166534] outline-hidden"
-                >
-                  <option value="cashier">Kasir (Cashier)</option>
-                  <option value="admin">Admin / Pemilik</option>
-                </select>
+                <input
+                  type="tel"
+                  value={phone}
+                  onChange={(e) => setPhone(e.target.value)}
+                  placeholder="08xxxxxxxxxx"
+                  className="w-full bg-[#FFFDF7] border border-[#E7E5E4] rounded-xl px-3 py-2 text-xs text-[#1C1917] focus:border-[#166534] outline-hidden"
+                />
               </div>
+            </div>
+
+            <div>
+              <label className="block font-bold text-[#1C1917] uppercase tracking-wider mb-1">
+                Peran (Role):
+              </label>
+              <select
+                value={role}
+                onChange={(e) => setRole(e.target.value as Role)}
+                className="w-full bg-[#FFFDF7] border border-[#E7E5E4] rounded-xl px-3 py-2 text-xs font-semibold text-[#1C1917] focus:border-[#166534] outline-hidden"
+              >
+                <option value="cashier">Kasir (Cashier)</option>
+                <option value="admin">Admin / Pemilik</option>
+              </select>
             </div>
 
             <div>

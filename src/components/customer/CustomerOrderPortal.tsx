@@ -3,7 +3,7 @@ import { usePOS } from '../../context/POSContext';
 import { MenuItem, MenuCategory, CartItem, CartItemOption, PaymentMethod, TableOrder } from '../../types';
 import { CustomerItemCustomizerModal } from './CustomerItemCustomizerModal';
 import { CustomerOrderSuccess } from './CustomerOrderSuccess';
-import { formatCurrency } from '../../utils/formatters';
+import { DEFAULT_MENU_IMAGE, formatCurrency } from '../../utils/formatters';
 import {
   Utensils,
   Search,
@@ -302,7 +302,7 @@ export const CustomerOrderPortal: React.FC<CustomerOrderPortalProps> = ({
                 <div>
                   <div className="relative h-44 bg-stone-100 overflow-hidden">
                     <img
-                      src={item.image}
+                      src={item.image || DEFAULT_MENU_IMAGE}
                       alt={item.name}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                     />
@@ -465,7 +465,7 @@ export const CustomerOrderPortal: React.FC<CustomerOrderPortalProps> = ({
                     <div key={item.id} className="py-3 flex items-start justify-between gap-3">
                       <div className="flex items-start gap-3">
                         <img
-                          src={item.image}
+                          src={item.image || DEFAULT_MENU_IMAGE}
                           alt={item.name}
                           className="w-12 h-12 rounded-xl object-cover border border-stone-200 shrink-0"
                         />

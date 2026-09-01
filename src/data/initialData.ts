@@ -1,26 +1,51 @@
 import { MenuItem, InventoryItem, User, StoreSettings, Transaction, TableConfig, TableOrder, Category } from '../types';
 
+const makeSeedUuid = (seed: string): string => {
+  let hash = 2166136261;
+  for (let i = 0; i < seed.length; i += 1) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+
+  const bytes = new Array(16).fill(0).map((_, index) => {
+    const value = (hash >> ((index % 4) * 8)) & 0xff;
+    return value ^ ((seed.charCodeAt(index % seed.length) + index * 17) & 0xff);
+  });
+
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+  return [
+    hex.slice(0, 8),
+    hex.slice(8, 12),
+    hex.slice(12, 16),
+    hex.slice(16, 20),
+    hex.slice(20, 32),
+  ].join('-');
+};
+
 export const INITIAL_CATEGORIES: Category[] = [
   {
-    id: 'mie-aceh',
+    id: makeSeedUuid('mie-aceh'),
     name: 'Mie Aceh',
     icon: '🍜',
     description: 'Mie khas Aceh racikan rempah istimewa (Kering, Basah, Kuah)',
   },
   {
-    id: 'nasgor-aceh',
+    id: makeSeedUuid('nasgor-aceh'),
     name: 'Nasi Goreng Aceh',
     icon: '🍛',
     description: 'Nasi goreng harum rempah Serambi Mekkah',
   },
   {
-    id: 'kwetiaw-bihun',
+    id: makeSeedUuid('kwetiaw-bihun'),
     name: 'Kwetiaw / Bihun / Capcay',
     icon: '🥢',
     description: 'Kwetiaw, Bihun, dan Capcay pilihan Kering atau Kuah',
   },
   {
-    id: 'minuman',
+    id: makeSeedUuid('minuman'),
     name: 'Minuman',
     icon: '🧋',
     description: 'Aneka minuman segar, kopi Aceh, teh tarik & jamu jahe',
@@ -28,25 +53,25 @@ export const INITIAL_CATEGORIES: Category[] = [
 ];
 
 export const INITIAL_USERS: User[] = [
-  {
-    id: 'usr_admin_1',
-    name: 'Administrator',
-    username: 'admin',
-    password: 'admin123',
-    pin: 'admin123',
-    role: 'admin',
-    phone: '081295422076',
-    active: true,
-    lastLogin: undefined,
-    totalTransactions: 0,
-    createdAt: new Date().toISOString(),
-  },
+  // {
+  //   id: 'usr_admin_1',
+  //   name: 'Administrator',
+  //   username: 'admin',
+  //   password: 'admin123',
+  //   pin: 'admin123',
+  //   role: 'admin',
+  //   phone: '081295422076',
+  //   active: true,
+  //   lastLogin: undefined,
+  //   totalTransactions: 0,
+  //   createdAt: new Date().toISOString(),
+  // },
 ];
 
 export const INITIAL_MENU_ITEMS: MenuItem[] = [
   // 1. MIE ACEH ( KERING, BASAH , KUAH )
   {
-    id: 'mie_telur',
+    id: makeSeedUuid('mie_telur'),
     name: 'Mie Aceh Telur',
     category: 'mie-aceh',
     description: 'Mie kuning khas Aceh bumbu rempah dengan telur (Pilihan: Kering, Basah, Kuah).',
@@ -63,7 +88,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'mie_ayam',
+    id: makeSeedUuid('mie_ayam'),
     name: 'Mie Aceh Ayam',
     category: 'mie-aceh',
     description: 'Mie khas Aceh rempah kaya rasa dengan suwiran daging ayam gurih empuk.',
@@ -80,7 +105,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'mie_sapi',
+    id: makeSeedUuid('mie_sapi'),
     name: 'Mie Aceh Sapi',
     category: 'mie-aceh',
     description: 'Mie Aceh bumbu rempah medok dengan potongan daging sapi empuk.',
@@ -97,7 +122,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'mie_seafood',
+    id: makeSeedUuid('mie_seafood'),
     name: 'Mie Aceh Seafood',
     category: 'mie-aceh',
     description: 'Mie Aceh rempah spesial berpadu udang dan cumi segar laut pilihan.',
@@ -114,7 +139,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'mie_spesial',
+    id: makeSeedUuid('mie_spesial'),
     name: 'Mie Aceh Spesial',
     category: 'mie-aceh',
     description: 'Menu andalan komplit istimewa! Kombinasi daging sapi, udang laut, ayam, dan telur.',
@@ -133,7 +158,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
 
   // 2. NASI GORENG ACEH
   {
-    id: 'nasgor_telur',
+    id: makeSeedUuid('nasgor_telur'),
     name: 'Nasgor Telur',
     category: 'nasgor-aceh',
     description: 'Nasi goreng racikan bumbu rempah Aceh dengan telur dan emping renyah.',
@@ -149,7 +174,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'nasgor_ayam',
+    id: makeSeedUuid('nasgor_ayam'),
     name: 'Nasgor Ayam',
     category: 'nasgor-aceh',
     description: 'Nasi goreng harum rempah Serambi Mekkah dengan potongan ayam lezat.',
@@ -165,7 +190,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'nasgor_sapi',
+    id: makeSeedUuid('nasgor_sapi'),
     name: 'Nasgor Sapi',
     category: 'nasgor-aceh',
     description: 'Nasi goreng rempah istimewa dengan irisan daging sapi empuk.',
@@ -181,7 +206,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'nasgor_seafood',
+    id: makeSeedUuid('nasgor_seafood'),
     name: 'Nasgor Seafood',
     category: 'nasgor-aceh',
     description: 'Nasi goreng Aceh bumbu medok dengan udang dan cumi segar gurih.',
@@ -197,7 +222,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'nasgor_spesial',
+    id: makeSeedUuid('nasgor_spesial'),
     name: 'Nasgor Spesial',
     category: 'nasgor-aceh',
     description: 'Nasi goreng komplit Aceh dengan topping sapi, udang, ayam, dan telur.',
@@ -215,7 +240,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
 
   // 3. KWETIAW / BIHUN / CAPCAY ( KERING, KUAH )
   {
-    id: 'kwetiaw_telur',
+    id: makeSeedUuid('kwetiaw_telur'),
     name: 'Kwetiaw Topping Telur',
     category: 'kwetiaw-bihun',
     description: 'Kwetiaw kenyal bumbu rempah Aceh dengan telur (Pilihan: Kering / Kuah).',
@@ -231,7 +256,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'kwetiaw_ayam',
+    id: makeSeedUuid('kwetiaw_ayam'),
     name: 'Kwetiaw Topping Ayam',
     category: 'kwetiaw-bihun',
     description: 'Kwetiaw rempah Aceh gurih dengan suwiran daging ayam pilihan.',
@@ -247,7 +272,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'kwetiaw_sapi',
+    id: makeSeedUuid('kwetiaw_sapi'),
     name: 'Kwetiaw Topping Sapi',
     category: 'kwetiaw-bihun',
     description: 'Kwetiaw rempah khas dengan potongan daging sapi empuk melimpah.',
@@ -263,7 +288,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'kwetiaw_seafood',
+    id: makeSeedUuid('kwetiaw_seafood'),
     name: 'Kwetiaw Topping Seafood',
     category: 'kwetiaw-bihun',
     description: 'Kwetiaw bumbu Aceh dengan aneka seafood segar udang dan cumi.',
@@ -279,7 +304,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'kwetiaw_spesial',
+    id: makeSeedUuid('kwetiaw_spesial'),
     name: 'Kwetiaw Topping Spesial',
     category: 'kwetiaw-bihun',
     description: 'Kwetiaw komplit istimewa dengan sapi, ayam, seafood, dan telur.',
@@ -295,7 +320,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'bihun_telur',
+    id: makeSeedUuid('bihun_telur'),
     name: 'Bihun Topping Telur',
     category: 'kwetiaw-bihun',
     description: 'Bihun lembut bumbu rempah Aceh dengan telur gurih (Kering / Kuah).',
@@ -311,7 +336,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'bihun_ayam',
+    id: makeSeedUuid('bihun_ayam'),
     name: 'Bihun Topping Ayam',
     category: 'kwetiaw-bihun',
     description: 'Bihun rempah Aceh harum dengan daging ayam suwir lembut.',
@@ -327,7 +352,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'bihun_sapi',
+    id: makeSeedUuid('bihun_sapi'),
     name: 'Bihun Topping Sapi',
     category: 'kwetiaw-bihun',
     description: 'Bihun rempah Aceh dengan irisan daging sapi empuk dan gurih.',
@@ -343,7 +368,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'bihun_seafood',
+    id: makeSeedUuid('bihun_seafood'),
     name: 'Bihun Topping Seafood',
     category: 'kwetiaw-bihun',
     description: 'Bihun rempah Aceh dengan seafood udang dan cumi segar melimpah.',
@@ -359,7 +384,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'bihun_spesial',
+    id: makeSeedUuid('bihun_spesial'),
     name: 'Bihun Topping Spesial',
     category: 'kwetiaw-bihun',
     description: 'Bihun komplit istimewa dengan daging sapi, ayam, seafood, dan telur.',
@@ -375,7 +400,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'capcay_telur',
+    id: makeSeedUuid('capcay_telur'),
     name: 'Capcay Topping Telur',
     category: 'kwetiaw-bihun',
     description: 'Aneka sayuran segar dimasak kuah/kering gurih dengan telur.',
@@ -390,7 +415,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'capcay_ayam',
+    id: makeSeedUuid('capcay_ayam'),
     name: 'Capcay Topping Ayam',
     category: 'kwetiaw-bihun',
     description: 'Sayuran segar gurih kaya vitamin dengan potongan daging ayam empuk.',
@@ -405,7 +430,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'capcay_sapi',
+    id: makeSeedUuid('capcay_sapi'),
     name: 'Capcay Topping Sapi',
     category: 'kwetiaw-bihun',
     description: 'Capcay sayur komplit dengan irisan daging sapi tebal empuk.',
@@ -420,7 +445,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'capcay_seafood',
+    id: makeSeedUuid('capcay_seafood'),
     name: 'Capcay Topping Seafood',
     category: 'kwetiaw-bihun',
     description: 'Capcay aneka sayur segar dengan udang dan cumi laut pilihan.',
@@ -435,7 +460,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'capcay_spesial',
+    id: makeSeedUuid('capcay_spesial'),
     name: 'Capcay Topping Spesial',
     category: 'kwetiaw-bihun',
     description: 'Capcay istimewa komplit sapi, ayam, seafood, dan telur.',
@@ -452,7 +477,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
 
   // 4. MINUMAN
   {
-    id: 'teh_manis_hangat',
+    id: makeSeedUuid('teh_manis_hangat'),
     name: 'Teh Manis Hangat',
     category: 'minuman',
     description: 'Teh seduh wangi melati hangat dengan gula murni.',
@@ -466,7 +491,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'es_teh_manis',
+    id: makeSeedUuid('es_teh_manis'),
     name: 'Es Teh Manis',
     category: 'minuman',
     description: 'Es teh manis segar dingin pelepas dahaga.',
@@ -481,7 +506,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'jeruk_panas',
+    id: makeSeedUuid('jeruk_panas'),
     name: 'Jeruk Panas',
     category: 'minuman',
     description: 'Perasan jeruk murni hangat kaya vitamin C.',
@@ -495,7 +520,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'es_jeruk',
+    id: makeSeedUuid('es_jeruk'),
     name: 'Es Jeruk',
     category: 'minuman',
     description: 'Perasan jeruk segar asli dingin nikmat.',
@@ -510,7 +535,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'es_timun',
+    id: makeSeedUuid('es_timun'),
     name: 'Es Timun',
     category: 'minuman',
     description: 'Minuman khas Serambi Mekkah dari serutan mentimun segar dan sirup pilihan penyegar tubuh.',
@@ -525,7 +550,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'es_lemon_tea',
+    id: makeSeedUuid('es_lemon_tea'),
     name: 'Es Lemon Tea',
     category: 'minuman',
     description: 'Perpaduan teh berkualitas dengan perasan buah lemon asli segar dingin.',
@@ -539,7 +564,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'es_kopi_susu',
+    id: makeSeedUuid('es_kopi_susu'),
     name: 'Es Kopi / Es Kopi Susu',
     category: 'minuman',
     description: 'Kopi khas Aceh beraroma harum dipadu susu kental manis gurih dingin.',
@@ -554,7 +579,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'kopi_hitam_gula_aren',
+    id: makeSeedUuid('kopi_hitam_gula_aren'),
     name: 'Kopi Hitam Gula Aren',
     category: 'minuman',
     description: 'Kopi hitam robusta Aceh mantap dipadu manis gurihnya gula aren alami.',
@@ -568,7 +593,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'kopi_ginseng',
+    id: makeSeedUuid('kopi_ginseng'),
     name: 'Kopi Ginseng',
     category: 'minuman',
     description: 'Kopi berenergi dengan ekstrak ginseng pilihan penambah stamina.',
@@ -582,7 +607,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'jahe_merah',
+    id: makeSeedUuid('jahe_merah'),
     name: 'Jahe Merah',
     category: 'minuman',
     description: 'Seduhan jahe merah hangat khas rempah yang menghangatkan tubuh.',
@@ -596,7 +621,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'teh_hijau',
+    id: makeSeedUuid('teh_hijau'),
     name: 'Teh Hijau',
     category: 'minuman',
     description: 'Teh hijau seduh wangi kaya antioksidan segar.',
@@ -610,7 +635,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'thai_tea',
+    id: makeSeedUuid('thai_tea'),
     name: 'Thai Tea',
     category: 'minuman',
     description: 'Thai tea creamy manis segar otentik.',
@@ -624,7 +649,7 @@ export const INITIAL_MENU_ITEMS: MenuItem[] = [
     updatedAt: new Date().toISOString(),
   },
   {
-    id: 'teh_tarik',
+    id: makeSeedUuid('teh_tarik'),
     name: 'Teh Tarik',
     category: 'minuman',
     description: 'Teh tarik khas berbusa lembut dengan rasa teh dan susu yang pas gurihnya.',

@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { MenuItem, CartItemOption, CookingStyle, SpiceLevel } from '../../types';
-import { formatCurrency } from '../../utils/formatters';
+import { DEFAULT_MENU_IMAGE, formatCurrency } from '../../utils/formatters';
 import { X, Flame, ChefHat, Plus, Minus, Check, MessageSquare } from 'lucide-react';
 
 interface CustomerItemCustomizerModalProps {
@@ -63,7 +63,7 @@ export const CustomerItemCustomizerModal: React.FC<CustomerItemCustomizerModalPr
         {/* Header Image & Info */}
         <div className="relative h-44 sm:h-52 bg-stone-100 shrink-0">
           <img
-            src={item.image}
+            src={item.image || DEFAULT_MENU_IMAGE}
             alt={item.name}
             className="w-full h-full object-cover"
           />

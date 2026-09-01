@@ -1,6 +1,6 @@
 import React from 'react';
 import { MenuItem } from '../../types';
-import { formatRupiah } from '../../utils/formatters';
+import { DEFAULT_MENU_IMAGE, formatRupiah } from '../../utils/formatters';
 import { Plus, Flame, Sparkles } from 'lucide-react';
 
 interface MenuCardProps {
@@ -40,7 +40,7 @@ export const MenuCard: React.FC<MenuCardProps> = ({ item, onSelect, cartItemCoun
       {/* Image container */}
       <div className="relative h-32 md:h-36 w-full bg-stone-100 overflow-hidden shrink-0">
         <img
-          src={item.image}
+          src={item.image || DEFAULT_MENU_IMAGE}
           alt={item.name}
           className={`w-full h-full object-cover transition-transform duration-300 group-hover:scale-105 ${
             isOutOfStock ? 'grayscale' : ''

@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { usePOS } from '../../context/POSContext';
 import { MenuItem, Category } from '../../types';
-import { formatRupiah } from '../../utils/formatters';
+import { DEFAULT_MENU_IMAGE, formatRupiah } from '../../utils/formatters';
 import { Modal } from '../common/Modal';
 import {
   UtensilsCrossed,
@@ -58,8 +58,15 @@ export const MenuManagementView: React.FC = () => {
     image: '',
   });
 
+  const getCategoryValue = (category: string | undefined): string => {
+    if (!category) return '';
+    const match = categories.find((c) => c.id === category || c.name === category);
+    return match ? match.name : category;
+  };
+
   const filteredItems = menuItems.filter((item) => {
-    if (categoryFilter !== 'all' && item.category !== categoryFilter) return false;
+    const itemCategory = getCategoryValue(item.category);
+    if (categoryFilter !== 'all' && itemCategory !== categoryFilter) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       return item.name.toLowerCase().includes(q) || item.description.toLowerCase().includes(q);
@@ -69,7 +76,7 @@ export const MenuManagementView: React.FC = () => {
 
   const handleOpenAdd = () => {
     setEditingItem(null);
-    const initialCategory = categories.length > 0 ? categories[0].id : '';
+    const initialCategory = categories.length > 0 ? categories[0].name : '';
     setFormData({
       name: '',
       category: initialCategory,
@@ -91,7 +98,7 @@ export const MenuManagementView: React.FC = () => {
     setEditingItem(item);
     setFormData({
       name: item.name,
-      category: item.category,
+      category: getCategoryValue(item.category),
       customCategoryName: '',
       price: item.price,
       costPrice: item.costPrice,
@@ -113,24 +120,42 @@ export const MenuManagementView: React.FC = () => {
       return;
     }
 
-    let targetCategory = formData.category;
+    let targetCategory = formData.category.trim();
 
-    // If user provided a custom category or no category exists
     if ((!targetCategory || targetCategory === 'new') && formData.customCategoryName.trim()) {
       const catName = formData.customCategoryName.trim();
       const existing = categories.find((c) => c.name.toLowerCase() === catName.toLowerCase());
       if (existing) {
-        targetCategory = existing.id;
+        targetCategory = existing.name;
       } else {
-        const newCatId = catName.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || `cat_${Date.now()}`;
-        await addCategory({ name: catName });
-        targetCategory = newCatId;
+        const newCatId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+              const random = Math.random() * 16 | 0;
+              const value = char === 'x' ? random : (random & 0x3 | 0x8);
+              return value.toString(16);
+            });
+        await addCategory({ id: newCatId, name: catName });
+        targetCategory = catName;
       }
     } else if (!targetCategory && categories.length > 0) {
-      targetCategory = categories[0].id;
+      targetCategory = categories[0].name;
     } else if (!targetCategory) {
-      targetCategory = 'menu-umum';
-      await addCategory({ name: 'Menu Umum' });
+      const defaultCategoryName = 'Menu Umum';
+      const existing = categories.find((c) => c.name.toLowerCase() === defaultCategoryName.toLowerCase());
+      if (existing) {
+        targetCategory = existing.name;
+      } else {
+        const defaultCatId = typeof crypto !== 'undefined' && 'randomUUID' in crypto
+          ? crypto.randomUUID()
+          : 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+              const random = Math.random() * 16 | 0;
+              const value = char === 'x' ? random : (random & 0x3 | 0x8);
+              return value.toString(16);
+            });
+        await addCategory({ id: defaultCatId, name: defaultCategoryName });
+        targetCategory = defaultCategoryName;
+      }
     }
 
     const payload = {
@@ -148,12 +173,16 @@ export const MenuManagementView: React.FC = () => {
       image: formData.image.trim(),
     };
 
-    if (editingItem) {
-      await updateMenuItem(editingItem.id, payload);
-    } else {
-      await addMenuItem(payload);
+    try {
+      if (editingItem) {
+        await updateMenuItem(editingItem.id, payload);
+      } else {
+        await addMenuItem(payload);
+      }
+      setIsModalOpen(false);
+    } catch (error: any) {
+      showToast(error?.message || 'Gagal menyimpan menu ke database.', 'error');
     }
-    setIsModalOpen(false);
   };
 
   const handleDelete = (item: MenuItem) => {
@@ -175,6 +204,12 @@ export const MenuManagementView: React.FC = () => {
       addCategory({ name: newCategoryName.trim() });
     }
     setNewCategoryName('');
+  };
+
+  const categoryNameByItem = (itemCategory?: string) => {
+    if (!itemCategory) return 'Tanpa Kategori';
+    const match = categories.find((c) => c.id === itemCategory || c.name === itemCategory);
+    return match ? match.name : itemCategory;
   };
 
   const handleDeleteCategory = (cat: Category) => {
@@ -243,9 +278,9 @@ export const MenuManagementView: React.FC = () => {
           >
             <option value="all">Semua Kategori ({menuItems.length})</option>
             {categories.map((c) => {
-              const count = menuItems.filter((m) => m.category === c.id).length;
+              const count = menuItems.filter((m) => getCategoryValue(m.category) === c.name).length;
               return (
-                <option key={c.id} value={c.id}>
+                <option key={c.id} value={c.name}>
                   {c.name} ({count})
                 </option>
               );
@@ -291,14 +326,14 @@ export const MenuManagementView: React.FC = () => {
                 {filteredItems.map((item) => {
                   const profitMargin = item.price - item.costPrice;
                   const profitPercent = Math.round((profitMargin / (item.price || 1)) * 100);
-                  const catObj = categories.find((c) => c.id === item.category);
+                  const catLabel = categoryNameByItem(item.category);
 
                   return (
                     <tr key={item.id} className="hover:bg-[#FFFDF7]/80 transition-colors">
                       <td className="py-3 px-4">
                         <div className="flex items-center gap-3">
                           <img
-                            src={item.image || 'https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=600'}
+                            src={item.image || DEFAULT_MENU_IMAGE}
                             alt={item.name}
                             className="w-10 h-10 rounded-xl object-cover border border-[#E7E5E4] shrink-0"
                           />
@@ -317,7 +352,7 @@ export const MenuManagementView: React.FC = () => {
                       </td>
                       <td className="py-3 px-4">
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-stone-100 text-[#1C1917] capitalize">
-                          {catObj?.name || item.category.replace('-', ' ')}
+                          {catLabel}
                         </span>
                       </td>
                       <td className="py-3 px-4 font-mono font-bold text-[#166534]">
@@ -506,7 +541,7 @@ export const MenuManagementView: React.FC = () => {
                       className="w-full bg-[#FFFDF7] border border-[#E7E5E4] rounded-xl px-3 py-2 text-xs font-semibold text-[#1C1917] focus:border-[#166534] outline-hidden"
                     >
                       {categories.map((c) => (
-                        <option key={c.id} value={c.id}>
+                        <option key={c.id} value={c.name}>
                           {c.name}
                         </option>
                       ))}

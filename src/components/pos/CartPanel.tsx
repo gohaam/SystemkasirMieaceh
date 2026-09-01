@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { usePOS } from '../../context/POSContext';
 import { OrderType } from '../../types';
-import { formatRupiah } from '../../utils/formatters';
+import { DEFAULT_MENU_IMAGE, formatRupiah } from '../../utils/formatters';
 import {
   ShoppingBag,
   Trash2,
@@ -186,7 +186,7 @@ export const CartPanel: React.FC<CartPanelProps> = ({ onOpenPayment }) => {
           cart.map((item) => (
             <div key={item.id} className="pt-3 first:pt-0 flex gap-3 group">
               <img
-                src={item.image}
+                src={item.image || DEFAULT_MENU_IMAGE}
                 alt={item.name}
                 className="w-12 h-12 rounded-xl object-cover shrink-0 border border-[#E7E5E4]"
               />

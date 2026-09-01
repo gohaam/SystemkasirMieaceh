@@ -16,7 +16,7 @@ export interface User {
 }
 
 export interface Category {
-  id: string; // e.g. "mie-aceh", "makanan", "minuman", "snack"
+  id: string; // uuid-based id for Supabase; examples: "8e8a..."
   name: string; // e.g. "Mie Aceh", "Makanan", "Minuman", "Snack"
   icon?: string;
   description?: string;

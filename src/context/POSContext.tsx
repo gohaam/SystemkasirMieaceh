@@ -24,10 +24,165 @@ import {
   INITIAL_TABLE_ORDERS,
   generateSeedTransactions,
 } from '../data/initialData';
-import { generateId, generateInvoiceNumber } from '../utils/formatters';
+import { DEFAULT_MENU_IMAGE, generateId, generateInvoiceNumber } from '../utils/formatters';
 import { sqlite } from '../db/sqliteAdapter';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 import { ExportService } from '../services/exportService';
 import { BackupService } from '../services/backupService';
+
+const generateSupabaseUserId = (): string => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.random() * 16 | 0;
+    const value = char === 'x' ? random : (random & 0x3 | 0x8);
+    return value.toString(16);
+  });
+};
+
+const generateSupabaseUuid = (): string => {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (char) => {
+    const random = Math.random() * 16 | 0;
+    const value = char === 'x' ? random : (random & 0x3 | 0x8);
+    return value.toString(16);
+  });
+};
+
+const normalizeSupabaseUserId = (value?: string): string => {
+  if (!value) return generateSupabaseUuid();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return isUuid ? value : generateSupabaseUuid();
+};
+
+const normalizeSupabaseUuid = (value?: string): string => {
+  if (!value) return generateSupabaseUuid();
+  const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  return isUuid ? value : generateSupabaseUuid();
+};
+
+const mapSupabaseCategory = (row: any): Category => ({
+  id: String(row.id ?? generateSupabaseUuid()),
+  name: row.name ?? 'Kategori Baru',
+  icon: row.icon ?? undefined,
+  description: row.description ?? '',
+});
+
+const mapSupabaseMenuItem = (row: any): MenuItem => ({
+  id: String(row.id ?? generateSupabaseUuid()),
+  name: row.name ?? '',
+  category: String(row.category ?? row.category_name ?? ''),
+  description: row.description ?? '',
+  price: Number(row.price ?? 0),
+  costPrice: Number(row.cost_price ?? 0),
+  image: row.image || DEFAULT_MENU_IMAGE,
+  stock: Number(row.stock ?? 0),
+  unit: row.unit ?? 'Porsi',
+  isAvailable: Boolean(row.is_active ?? true),
+  isPopular: Boolean(row.is_popular),
+  spicyOptions: Number(row.spicy_options ?? 1) > 0,
+  cookingStyleOptions: Number(row.cooking_style_options ?? 1) > 0,
+  createdAt: row.created_at ?? new Date().toISOString(),
+  updatedAt: row.updated_at ?? new Date().toISOString(),
+});
+
+const loadCategoriesFromSupabase = async (): Promise<Category[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.from('categories').select('*').order('name', { ascending: true });
+  if (error) {
+    console.error('Gagal memuat kategori dari Supabase:', error);
+    return [];
+  }
+
+  return (data ?? []).map(mapSupabaseCategory);
+};
+
+const loadMenuItemsFromSupabase = async (): Promise<MenuItem[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.from('products').select('*').order('name', { ascending: true });
+  if (error) {
+    console.error('Gagal memuat menu dari Supabase:', error);
+    return [];
+  }
+
+  return (data ?? []).map(mapSupabaseMenuItem);
+};
+
+const persistCategoryToSupabase = async (category: Category): Promise<void> => {
+  if (!supabase) return;
+
+  const payload = {
+    id: normalizeSupabaseUuid(category.id),
+    name: category.name,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase.from('categories').upsert(payload, { onConflict: 'id' });
+  if (error) {
+    console.error('Gagal menyimpan kategori ke Supabase:', error);
+    throw new Error(error.message || 'Gagal menyimpan kategori ke Supabase');
+  }
+};
+
+const persistMenuItemToSupabase = async (item: MenuItem): Promise<void> => {
+  if (!supabase) return;
+
+  const categoryName = String(item.category ?? '').trim();
+  if (!categoryName) {
+    throw new Error('Kategori menu wajib dipilih sebelum disimpan ke Supabase.');
+  }
+
+  const payload = {
+    id: normalizeSupabaseUuid(item.id),
+    name: String(item.name ?? '').trim(),
+    category: categoryName,
+    price: Number(item.price ?? 0),
+    cost_price: Number(item.costPrice ?? 0),
+    stock: Number(item.stock ?? 0),
+    unit: item.unit || 'Porsi',
+    description: item.description || '',
+    image: item.image || DEFAULT_MENU_IMAGE,
+    is_active: Boolean(item.isAvailable),
+    is_popular: Boolean(item.isPopular),
+    spicy_options: Number(Boolean(item.spicyOptions)),
+    cooking_style_options: Number(Boolean(item.cookingStyleOptions)),
+    created_at: item.createdAt ?? new Date().toISOString(),
+    updated_at: item.updatedAt ?? new Date().toISOString(),
+  };
+
+  const { error } = await supabase.from('products').upsert(payload, { onConflict: 'id' });
+  if (error) {
+    console.error('Gagal menyimpan menu ke Supabase:', error);
+    throw new Error(error.message || 'Gagal menyimpan menu ke Supabase');
+  }
+};
+
+const deleteCategoryFromSupabase = async (id: string): Promise<void> => {
+  if (!supabase) return;
+
+  const { error } = await supabase.from('categories').delete().eq('id', id);
+  if (error) {
+    console.error('Gagal menghapus kategori dari Supabase:', error);
+    throw new Error(error.message || 'Gagal menghapus kategori dari Supabase');
+  }
+};
+
+const deleteMenuItemFromSupabase = async (id: string): Promise<void> => {
+  if (!supabase) return;
+
+  const { error } = await supabase.from('products').delete().eq('id', id);
+  if (error) {
+    console.error('Gagal menghapus menu dari Supabase:', error);
+    throw new Error(error.message || 'Gagal menghapus menu dari Supabase');
+  }
+};
 
 export interface ToastMessage {
   id: string;
@@ -90,13 +245,13 @@ interface POSContextType {
 
   // Categories & Menu & Inventory
   categories: Category[];
-  addCategory: (category: Omit<Category, 'id'>) => Promise<void>;
+  addCategory: (category: Omit<Category, 'id'> & { id?: string }) => Promise<void>;
   updateCategory: (id: string, updates: Partial<Category>) => Promise<void>;
   deleteCategory: (id: string) => Promise<void>;
 
   menuItems: MenuItem[];
   inventory: InventoryItem[];
-  addMenuItem: (item: Omit<MenuItem, 'id' | 'createdAt' | 'updatedAt'>) => Promise<void>;
+  addMenuItem: (item: Omit<MenuItem, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => Promise<void>;
   updateMenuItem: (id: string, updates: Partial<MenuItem>) => Promise<void>;
   deleteMenuItem: (id: string) => Promise<void>;
   toggleMenuAvailability: (id: string) => Promise<void>;
@@ -169,6 +324,107 @@ interface POSContextType {
 const POSContext = createContext<POSContextType | undefined>(undefined);
 
 const CURRENT_USER_KEY = 'mie_aceh_current_user_v1';
+
+const mapSupabaseUser = (row: any): User => ({
+  id: String(row.id),
+  name: row.name ?? '',
+  username: row.username ?? '',
+  role: String(row.role ?? '').toLowerCase() === 'admin' ? 'admin' : 'cashier',
+  phone: row.phone ?? '',
+  active: row.active ?? true,
+  pin: row.pin ?? row.password ?? row.password_hash ?? '1234',
+  password: row.password ?? row.password_hash ?? row.pin ?? '1234',
+  lastLogin: row.last_login ?? undefined,
+  totalTransactions: Number(row.total_transactions ?? 0),
+  createdAt: row.created_at ?? new Date().toISOString(),
+});
+
+const getSupabaseUserColumnSet = async (): Promise<Set<string>> => {
+  if (!supabase) return new Set();
+
+  const { data, error } = await supabase.from('users').select('*').limit(1);
+  if (error || !data || data.length === 0) {
+    return new Set(['id', 'username', 'password_hash', 'password', 'name', 'role']);
+  }
+
+  return new Set(Object.keys(data[0]));
+};
+
+const loadUsersFromSupabase = async (): Promise<User[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('users')
+    .select('*')
+    .order('role', { ascending: true })
+    .order('name', { ascending: true });
+
+  if (error) {
+    console.error('Gagal memuat data user dari Supabase:', error);
+    return [];
+  }
+
+  return (data ?? []).map(mapSupabaseUser);
+};
+
+const ensureSupabaseUsersSeed = async (fallbackUsers: User[] = []): Promise<User[]> => {
+  if (!supabase || fallbackUsers.length === 0) return [];
+
+  const { data: existingRows, error: existingError } = await supabase
+    .from('users')
+    .select('id, username')
+    .limit(1);
+
+  if (existingError) {
+    console.error('Gagal mengecek data user Supabase sebelum seeding:', existingError);
+    return fallbackUsers;
+  }
+
+  if (!existingRows || existingRows.length === 0) {
+    for (const user of fallbackUsers) {
+      await persistUserToSupabase(user);
+    }
+    return fallbackUsers;
+  }
+
+  return await loadUsersFromSupabase();
+};
+
+const persistUserToSupabase = async (user: User): Promise<void> => {
+  if (!supabase) return;
+
+  const availableColumns = await getSupabaseUserColumnSet();
+  const payload: Record<string, any> = {
+    id: user.id,
+    username: user.username,
+    name: user.name,
+    role: user.role,
+  };
+
+  if (availableColumns.has('password_hash')) payload.password_hash = user.password ?? user.pin ?? '1234';
+  if (availableColumns.has('password')) payload.password = user.password ?? user.pin ?? '1234';
+  if (availableColumns.has('phone')) payload.phone = user.phone ?? '';
+  if (availableColumns.has('active')) payload.active = Boolean(user.active);
+  if (availableColumns.has('pin')) payload.pin = user.pin ?? '1234';
+  if (availableColumns.has('last_login')) payload.last_login = user.lastLogin ?? null;
+  if (availableColumns.has('total_transactions')) payload.total_transactions = Number(user.totalTransactions ?? 0);
+  if (availableColumns.has('created_at')) payload.created_at = user.createdAt ?? new Date().toISOString();
+
+  const { error } = await supabase.from('users').upsert(payload, { onConflict: 'id' });
+  if (error) {
+    console.error('Gagal menyimpan user ke Supabase:', error);
+    throw new Error(error.message || 'Gagal menyimpan user ke Supabase');
+  }
+};
+
+const deleteUserFromSupabase = async (id: string): Promise<void> => {
+  if (!supabase) return;
+
+  const { error } = await supabase.from('users').delete().eq('id', id);
+  if (error) {
+    console.error('Gagal menghapus user dari Supabase:', error);
+  }
+};
 
 export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [isDbReady, setIsDbReady] = useState(false);
@@ -248,9 +504,17 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
             sqlite.getTableOrders(),
           ]);
 
-        setCategories(loadedCategories || []);
-        setUsers(loadedUsers && loadedUsers.length > 0 ? loadedUsers : INITIAL_USERS);
-        setMenuItems(loadedMenu || []);
+        const localUsers = loadedUsers && loadedUsers.length > 0 ? loadedUsers : INITIAL_USERS;
+        const supabaseUsers = isSupabaseConfigured ? await loadUsersFromSupabase() : [];
+        const supabaseCategories = isSupabaseConfigured ? await loadCategoriesFromSupabase() : [];
+        const supabaseMenu = isSupabaseConfigured ? await loadMenuItemsFromSupabase() : [];
+        const finalUsers = isSupabaseConfigured && supabaseUsers.length > 0 ? supabaseUsers : localUsers;
+        const finalCategories = isSupabaseConfigured && supabaseCategories.length > 0 ? supabaseCategories : (loadedCategories && loadedCategories.length > 0 ? loadedCategories : []);
+        const finalMenu = isSupabaseConfigured && supabaseMenu.length > 0 ? supabaseMenu : (loadedMenu && loadedMenu.length > 0 ? loadedMenu : INITIAL_MENU_ITEMS);
+
+        setCategories(finalCategories);
+        setUsers(finalUsers);
+        setMenuItems(finalMenu);
         setInventory(loadedInv || []);
         setTransactions(loadedTx || []);
         if (loadedSettings) setSettings(loadedSettings);
@@ -291,6 +555,31 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   // Auth Methods with offline verification
   const login = async (username: string, pin: string, roleRequired?: 'admin' | 'cashier'): Promise<boolean> => {
     try {
+      const sourceUsers = isSupabaseConfigured ? await loadUsersFromSupabase() : (users.length > 0 ? users : INITIAL_USERS);
+
+      const user = sourceUsers.find(
+        (u) =>
+          u.username.toLowerCase() === username.toLowerCase().trim() &&
+          (u.pin === pin.trim() || u.password === pin.trim() || !u.pin)
+      );
+
+      if (user && user.active) {
+        if (roleRequired && user.role !== roleRequired) {
+          showToast('Akses role tidak sesuai.', 'error');
+          return false;
+        }
+
+        const updatedUser = { ...user, lastLogin: new Date().toISOString() };
+        if (supabase) {
+          await supabase.from('users').update({ last_login: updatedUser.lastLogin }).eq('id', updatedUser.id);
+        }
+        await sqlite.saveUser(updatedUser);
+        setCurrentUser(updatedUser);
+        setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+        showToast(`Selamat datang, ${updatedUser.name}! (${updatedUser.role.toUpperCase()})`, 'success');
+        return true;
+      }
+
       const verified = await sqlite.verifyLogin(username, pin, roleRequired);
       if (verified) {
         setCurrentUser(verified);
@@ -298,6 +587,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
         showToast(`Selamat datang, ${verified.name}! (${verified.role.toUpperCase()})`, 'success');
         return true;
       }
+
       showToast('Username atau PIN salah, atau akun nonaktif.', 'error');
       return false;
     } catch (err) {
@@ -601,12 +891,23 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   };
 
   // Categories Management
-  const addCategory = async (category: Omit<Category, 'id'>) => {
-    const id = category.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') || generateId('cat');
+  const addCategory = async (category: Omit<Category, 'id'> & { id?: string }) => {
+    const id = normalizeSupabaseUuid(category.id);
     const newCategory: Category = {
       ...category,
       id,
     };
+
+    if (isSupabaseConfigured) {
+      await persistCategoryToSupabase(newCategory);
+      setCategories((prev) => {
+        const exists = prev.some((item) => item.id === newCategory.id);
+        return exists ? prev.map((item) => (item.id === newCategory.id ? newCategory : item)) : [...prev, newCategory];
+      });
+      showToast(`Kategori ${newCategory.name} berhasil ditambahkan!`, 'success');
+      return;
+    }
+
     await sqlite.saveCategory({
       id: newCategory.id,
       name: newCategory.name,
@@ -620,7 +921,15 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateCategory = async (id: string, updates: Partial<Category>) => {
     const existing = categories.find((c) => c.id === id);
     if (!existing) return;
-    const updated = { ...existing, ...updates };
+    const updated = { ...existing, ...updates, id: normalizeSupabaseUuid(existing.id) };
+
+    if (isSupabaseConfigured) {
+      await persistCategoryToSupabase(updated);
+      setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
+      showToast('Kategori berhasil diperbarui', 'success');
+      return;
+    }
+
     await sqlite.saveCategory({
       id: updated.id,
       name: updated.name,
@@ -638,19 +947,35 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       showToast('Kategori ini masih digunakan oleh menu. Ubah kategori menu terlebih dahulu.', 'error');
       return;
     }
+
+    if (isSupabaseConfigured) {
+      await deleteCategoryFromSupabase(id);
+      setCategories((prev) => prev.filter((c) => c.id !== id));
+      showToast('Kategori berhasil dihapus', 'info');
+      return;
+    }
+
     await sqlite.deleteCategory(id);
     setCategories((prev) => prev.filter((c) => c.id !== id));
     showToast('Kategori berhasil dihapus', 'info');
   };
 
   // Menu Management
-  const addMenuItem = async (item: Omit<MenuItem, 'id' | 'createdAt' | 'updatedAt'>) => {
+  const addMenuItem = async (item: Omit<MenuItem, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }) => {
     const newItem: MenuItem = {
       ...item,
-      id: generateId('menu'),
+      id: normalizeSupabaseUuid(item.id),
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    if (isSupabaseConfigured) {
+      await persistMenuItemToSupabase(newItem);
+      setMenuItems((prev) => [newItem, ...prev]);
+      showToast(`Menu ${newItem.name} berhasil ditambahkan!`, 'success');
+      return;
+    }
+
     await sqlite.saveProduct(newItem);
     setMenuItems((prev) => [newItem, ...prev]);
     showToast(`Menu ${newItem.name} berhasil ditambahkan!`, 'success');
@@ -662,14 +987,30 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updated: MenuItem = {
       ...existing,
       ...updates,
+      id: normalizeSupabaseUuid(existing.id),
       updatedAt: new Date().toISOString(),
     };
+
+    if (isSupabaseConfigured) {
+      await persistMenuItemToSupabase(updated);
+      setMenuItems((prev) => prev.map((item) => (item.id === id ? updated : item)));
+      showToast('Menu berhasil diperbarui', 'success');
+      return;
+    }
+
     await sqlite.saveProduct(updated);
     setMenuItems((prev) => prev.map((item) => (item.id === id ? updated : item)));
     showToast('Menu berhasil diperbarui', 'success');
   };
 
   const deleteMenuItem = async (id: string) => {
+    if (isSupabaseConfigured) {
+      await deleteMenuItemFromSupabase(id);
+      setMenuItems((prev) => prev.filter((item) => item.id !== id));
+      showToast('Menu berhasil dihapus', 'info');
+      return;
+    }
+
     await sqlite.deleteProduct(id);
     setMenuItems((prev) => prev.filter((item) => item.id !== id));
     showToast('Menu berhasil dihapus', 'info');
@@ -679,7 +1020,15 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const item = menuItems.find((m) => m.id === id);
     if (!item) return;
     const nextState = !item.isAvailable;
-    const updated = { ...item, isAvailable: nextState, updatedAt: new Date().toISOString() };
+    const updated = { ...item, id: normalizeSupabaseUuid(item.id), isAvailable: nextState, updatedAt: new Date().toISOString() };
+
+    if (isSupabaseConfigured) {
+      await persistMenuItemToSupabase(updated);
+      setMenuItems((prev) => prev.map((m) => (m.id === id ? updated : m)));
+      showToast(`${item.name} sekarang ${nextState ? 'Tersedia' : 'Habis'}`, 'info');
+      return;
+    }
+
     await sqlite.saveProduct(updated);
     setMenuItems((prev) => prev.map((m) => (m.id === id ? updated : m)));
     showToast(`${item.name} sekarang ${nextState ? 'Tersedia' : 'Habis'}`, 'info');
@@ -957,24 +1306,54 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addUser = async (user: Omit<User, 'id'>) => {
     const newUser: User = {
       ...user,
-      id: generateId('usr'),
+      id: normalizeSupabaseUserId(generateId('usr')),
       totalTransactions: 0,
+      createdAt: new Date().toISOString(),
     };
-    await sqlite.saveUser(newUser);
-    setUsers((prev) => [...prev, newUser]);
-    showToast(`Karyawan ${newUser.name} berhasil ditambahkan!`, 'success');
+
+    try {
+      await sqlite.saveUser(newUser);
+      if (isSupabaseConfigured) {
+        await persistUserToSupabase(newUser);
+        const refreshed = await loadUsersFromSupabase();
+        setUsers(refreshed.length > 0 ? refreshed : [newUser]);
+      } else {
+        setUsers((prev) => [...prev, newUser]);
+      }
+      showToast(`Karyawan ${newUser.name} berhasil ditambahkan!`, 'success');
+    } catch (error: any) {
+      console.error('Gagal menambah user:', error);
+      showToast(error?.message || 'Gagal menambahkan pengguna ke database.', 'error');
+    }
   };
 
   const updateUser = async (id: string, updates: Partial<User>) => {
     const existing = users.find((u) => u.id === id);
     if (!existing) return;
-    const updated = { ...existing, ...updates };
-    await sqlite.saveUser(updated);
-    setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
-    if (currentUser?.id === id) {
-      setCurrentUser(updated);
+    const updated = {
+      ...existing,
+      ...updates,
+      id: normalizeSupabaseUserId(existing.id),
+      updatedAt: new Date().toISOString(),
+    } as User;
+
+    try {
+      await sqlite.saveUser(updated);
+      if (isSupabaseConfigured) {
+        await persistUserToSupabase(updated);
+        const refreshed = await loadUsersFromSupabase();
+        setUsers(refreshed.length > 0 ? refreshed : users.map((u) => (u.id === id ? updated : u)));
+      } else {
+        setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
+      }
+      if (currentUser?.id === id) {
+        setCurrentUser(updated);
+      }
+      showToast('Data pengguna berhasil diperbarui', 'success');
+    } catch (error: any) {
+      console.error('Gagal memperbarui user:', error);
+      showToast(error?.message || 'Gagal memperbarui data pengguna.', 'error');
     }
-    showToast('Data pengguna berhasil diperbarui', 'success');
   };
 
   const toggleUserStatus = async (id: string) => {
@@ -983,6 +1362,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const nextActive = !target.active;
     const updated = { ...target, active: nextActive };
     await sqlite.saveUser(updated);
+    await persistUserToSupabase(updated);
     setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
     showToast(`Akun ${target.name} ${nextActive ? 'diaktifkan' : 'dinonaktifkan'}`, 'info');
   };
@@ -996,6 +1376,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       password: newPin,
     };
     await sqlite.saveUser(updated);
+    await persistUserToSupabase(updated);
     setUsers((prev) => prev.map((u) => (u.id === id ? updated : u)));
     showToast(`Password / PIN pengguna ${existing.name} berhasil direset!`, 'success');
   };
@@ -1006,6 +1387,7 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       return;
     }
     await sqlite.deleteUser(id);
+    await deleteUserFromSupabase(id);
     setUsers((prev) => prev.filter((u) => u.id !== id));
     showToast('Pengguna berhasil dihapus dari database', 'info');
   };

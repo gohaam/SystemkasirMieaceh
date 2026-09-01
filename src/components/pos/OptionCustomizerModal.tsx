@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { MenuItem, CookingStyle, SpiceLevel } from '../../types';
 import { Modal } from '../common/Modal';
-import { formatRupiah } from '../../utils/formatters';
+import { DEFAULT_MENU_IMAGE, formatRupiah } from '../../utils/formatters';
 import { Flame, Utensils, MessageSquare, Plus } from 'lucide-react';
 
 interface OptionCustomizerModalProps {
@@ -53,7 +53,7 @@ export const OptionCustomizerModal: React.FC<OptionCustomizerModalProps> = ({
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Item summary banner */}
         <div className="flex items-center gap-3 p-3 bg-stone-50 rounded-xl border border-stone-100">
-          <img src={item.image} alt={item.name} className="w-14 h-14 rounded-lg object-cover" />
+          <img src={item.image || DEFAULT_MENU_IMAGE} alt={item.name} className="w-14 h-14 rounded-lg object-cover" />
           <div className="flex-1">
             <h4 className="font-bold text-stone-900 text-sm">{item.name}</h4>
             <p className="text-xs font-mono font-bold text-emerald-700 mt-0.5">

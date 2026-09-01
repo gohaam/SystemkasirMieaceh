@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { usePOS } from '../../context/POSContext';
-import { formatRupiah, formatDateTime } from '../../utils/formatters';
+import { DEFAULT_MENU_IMAGE, formatRupiah, formatDateTime } from '../../utils/formatters';
 import {
   TrendingUp,
   Receipt,
@@ -375,7 +375,7 @@ export const DashboardView: React.FC = () => {
                 </span>
 
                 <img
-                  src={item.image}
+                  src={item.image || DEFAULT_MENU_IMAGE}
                   alt={item.name}
                   className="w-10 h-10 rounded-xl object-cover shrink-0 border border-[#E7E5E4]"
                 />

@@ -68,6 +68,8 @@ export const generateInvoiceNumber = (sequence: number): string => {
   return `INV-${year}${month}${day}-${seqStr}`;
 };
 
+export const DEFAULT_MENU_IMAGE = 'https://www.takingcharge.csh.umn.edu/sites/default/files/styles/max_1300x1300/public/healthy%20eating%20plate%20iStock-1433432507.jpg.webp?itok=D8OzVh7u';
+
 export const generateId = (prefix: string = 'id'): string => {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
 };

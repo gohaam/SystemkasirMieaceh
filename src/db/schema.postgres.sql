@@ -11,7 +11,11 @@ create table if not exists users (
   role text not null check (role in ('admin', 'cashier')),
   active boolean not null default true,
   pin text default '1234',
-  created_at timestamptz not null default now()
+  created_at timestamptz not null default now(),
+  password text default '',
+  phone text default '',
+  last_login timestamptz,
+  total_transactions integer not null default 0
 );
 
 create table if not exists categories (
@@ -133,3 +137,56 @@ create table if not exists sync_queue (
 create index if not exists idx_transactions_created_at on transactions(created_at);
 create index if not exists idx_transaction_items_transaction_id on transaction_items(transaction_id);
 create index if not exists idx_sync_queue_status on sync_queue(status, created_at);
+
+-- RLS policy for frontend client usage (anon/auth key)
+-- This is intended for a simple POS app using Supabase as the live database.
+-- If you later want stricter access, replace these with authenticated-only policies.
+
+alter table public.users enable row level security;
+alter table public.categories enable row level security;
+alter table public.products enable row level security;
+alter table public.transactions enable row level security;
+alter table public.transaction_items enable row level security;
+alter table public.tables enable row level security;
+alter table public.table_orders enable row level security;
+alter table public.store_settings enable row level security;
+
+create policy if not exists "users_select_all" on public.users for select using (true);
+create policy if not exists "users_insert_all" on public.users for insert with check (true);
+create policy if not exists "users_update_all" on public.users for update using (true) with check (true);
+create policy if not exists "users_delete_all" on public.users for delete using (true);
+
+create policy if not exists "categories_select_all" on public.categories for select using (true);
+create policy if not exists "categories_insert_all" on public.categories for insert with check (true);
+create policy if not exists "categories_update_all" on public.categories for update using (true) with check (true);
+create policy if not exists "categories_delete_all" on public.categories for delete using (true);
+
+create policy if not exists "products_select_all" on public.products for select using (true);
+create policy if not exists "products_insert_all" on public.products for insert with check (true);
+create policy if not exists "products_update_all" on public.products for update using (true) with check (true);
+create policy if not exists "products_delete_all" on public.products for delete using (true);
+
+create policy if not exists "transactions_select_all" on public.transactions for select using (true);
+create policy if not exists "transactions_insert_all" on public.transactions for insert with check (true);
+create policy if not exists "transactions_update_all" on public.transactions for update using (true) with check (true);
+create policy if not exists "transactions_delete_all" on public.transactions for delete using (true);
+
+create policy if not exists "transaction_items_select_all" on public.transaction_items for select using (true);
+create policy if not exists "transaction_items_insert_all" on public.transaction_items for insert with check (true);
+create policy if not exists "transaction_items_update_all" on public.transaction_items for update using (true) with check (true);
+create policy if not exists "transaction_items_delete_all" on public.transaction_items for delete using (true);
+
+create policy if not exists "tables_select_all" on public.tables for select using (true);
+create policy if not exists "tables_insert_all" on public.tables for insert with check (true);
+create policy if not exists "tables_update_all" on public.tables for update using (true) with check (true);
+create policy if not exists "tables_delete_all" on public.tables for delete using (true);
+
+create policy if not exists "table_orders_select_all" on public.table_orders for select using (true);
+create policy if not exists "table_orders_insert_all" on public.table_orders for insert with check (true);
+create policy if not exists "table_orders_update_all" on public.table_orders for update using (true) with check (true);
+create policy if not exists "table_orders_delete_all" on public.table_orders for delete using (true);
+
+create policy if not exists "store_settings_select_all" on public.store_settings for select using (true);
+create policy if not exists "store_settings_insert_all" on public.store_settings for insert with check (true);
+create policy if not exists "store_settings_update_all" on public.store_settings for update using (true) with check (true);
+create policy if not exists "store_settings_delete_all" on public.store_settings for delete using (true);
