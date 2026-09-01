@@ -46,7 +46,7 @@ const MainLayout: React.FC = () => {
     );
   }
 
-  // If not logged in and not customer mode
+  // If not logged in and not customer mode test
   if (!currentUser) {
     return <LoginView />;
   }
