@@ -43,6 +43,21 @@ create table if not exists products (
   updated_at timestamptz not null default now()
 );
 
+create table if not exists inventory (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  category text not null default 'Bahan Pokok',
+  current_stock integer not null default 0,
+  unit text not null default 'pcs',
+  min_stock integer not null default 0,
+  cost_per_unit integer not null default 0,
+  last_restocked timestamptz not null default now(),
+  status text not null default 'safe' check (status in ('safe', 'low', 'out_of_stock')),
+  supplier text default '',
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create table if not exists transactions (
   id uuid primary key default uuid_generate_v4(),
   invoice_number text not null unique,
@@ -142,51 +157,110 @@ create index if not exists idx_sync_queue_status on sync_queue(status, created_a
 -- This is intended for a simple POS app using Supabase as the live database.
 -- If you later want stricter access, replace these with authenticated-only policies.
 
+grant usage on schema public to anon, authenticated;
+grant select, insert, update, delete on all tables in schema public to anon, authenticated;
+grant usage, select on all sequences in schema public to anon, authenticated;
+grant select, insert, update, delete on table public.tables to anon, authenticated;
+grant select, insert, update, delete on table public.table_orders to anon, authenticated;
+
 alter table public.users enable row level security;
 alter table public.categories enable row level security;
 alter table public.products enable row level security;
+alter table public.inventory enable row level security;
 alter table public.transactions enable row level security;
 alter table public.transaction_items enable row level security;
 alter table public.tables enable row level security;
 alter table public.table_orders enable row level security;
 alter table public.store_settings enable row level security;
 
-create policy if not exists "users_select_all" on public.users for select using (true);
-create policy if not exists "users_insert_all" on public.users for insert with check (true);
-create policy if not exists "users_update_all" on public.users for update using (true) with check (true);
-create policy if not exists "users_delete_all" on public.users for delete using (true);
+drop policy if exists "users_select_all" on public.users;
+drop policy if exists "users_insert_all" on public.users;
+drop policy if exists "users_update_all" on public.users;
+drop policy if exists "users_delete_all" on public.users;
+create policy "users_select_all" on public.users for select using (true);
+create policy "users_insert_all" on public.users for insert with check (true);
+create policy "users_update_all" on public.users for update using (true) with check (true);
+create policy "users_delete_all" on public.users for delete using (true);
 
-create policy if not exists "categories_select_all" on public.categories for select using (true);
-create policy if not exists "categories_insert_all" on public.categories for insert with check (true);
-create policy if not exists "categories_update_all" on public.categories for update using (true) with check (true);
-create policy if not exists "categories_delete_all" on public.categories for delete using (true);
+drop policy if exists "categories_select_all" on public.categories;
+drop policy if exists "categories_insert_all" on public.categories;
+drop policy if exists "categories_update_all" on public.categories;
+drop policy if exists "categories_delete_all" on public.categories;
+create policy "categories_select_all" on public.categories for select using (true);
+create policy "categories_insert_all" on public.categories for insert with check (true);
+create policy "categories_update_all" on public.categories for update using (true) with check (true);
+create policy "categories_delete_all" on public.categories for delete using (true);
 
-create policy if not exists "products_select_all" on public.products for select using (true);
-create policy if not exists "products_insert_all" on public.products for insert with check (true);
-create policy if not exists "products_update_all" on public.products for update using (true) with check (true);
-create policy if not exists "products_delete_all" on public.products for delete using (true);
+drop policy if exists "products_select_all" on public.products;
+drop policy if exists "products_insert_all" on public.products;
+drop policy if exists "products_update_all" on public.products;
+drop policy if exists "products_delete_all" on public.products;
+create policy "products_select_all" on public.products for select using (true);
+create policy "products_insert_all" on public.products for insert with check (true);
+create policy "products_update_all" on public.products for update using (true) with check (true);
+create policy "products_delete_all" on public.products for delete using (true);
 
-create policy if not exists "transactions_select_all" on public.transactions for select using (true);
-create policy if not exists "transactions_insert_all" on public.transactions for insert with check (true);
-create policy if not exists "transactions_update_all" on public.transactions for update using (true) with check (true);
-create policy if not exists "transactions_delete_all" on public.transactions for delete using (true);
+drop policy if exists "inventory_select_all" on public.inventory;
+drop policy if exists "inventory_insert_all" on public.inventory;
+drop policy if exists "inventory_update_all" on public.inventory;
+drop policy if exists "inventory_delete_all" on public.inventory;
+create policy "inventory_select_all" on public.inventory for select using (true);
+create policy "inventory_insert_all" on public.inventory for insert with check (true);
+create policy "inventory_update_all" on public.inventory for update using (true) with check (true);
+create policy "inventory_delete_all" on public.inventory for delete using (true);
 
-create policy if not exists "transaction_items_select_all" on public.transaction_items for select using (true);
-create policy if not exists "transaction_items_insert_all" on public.transaction_items for insert with check (true);
-create policy if not exists "transaction_items_update_all" on public.transaction_items for update using (true) with check (true);
-create policy if not exists "transaction_items_delete_all" on public.transaction_items for delete using (true);
+drop policy if exists "transactions_select_all" on public.transactions;
+drop policy if exists "transactions_insert_all" on public.transactions;
+drop policy if exists "transactions_update_all" on public.transactions;
+drop policy if exists "transactions_delete_all" on public.transactions;
+create policy "transactions_select_all" on public.transactions for select using (true);
+create policy "transactions_insert_all" on public.transactions for insert with check (true);
+create policy "transactions_update_all" on public.transactions for update using (true) with check (true);
+create policy "transactions_delete_all" on public.transactions for delete using (true);
 
-create policy if not exists "tables_select_all" on public.tables for select using (true);
-create policy if not exists "tables_insert_all" on public.tables for insert with check (true);
-create policy if not exists "tables_update_all" on public.tables for update using (true) with check (true);
-create policy if not exists "tables_delete_all" on public.tables for delete using (true);
+drop policy if exists "transaction_items_select_all" on public.transaction_items;
+drop policy if exists "transaction_items_insert_all" on public.transaction_items;
+drop policy if exists "transaction_items_update_all" on public.transaction_items;
+drop policy if exists "transaction_items_delete_all" on public.transaction_items;
+create policy "transaction_items_select_all" on public.transaction_items for select using (true);
+create policy "transaction_items_insert_all" on public.transaction_items for insert with check (true);
+create policy "transaction_items_update_all" on public.transaction_items for update using (true) with check (true);
+create policy "transaction_items_delete_all" on public.transaction_items for delete using (true);
 
-create policy if not exists "table_orders_select_all" on public.table_orders for select using (true);
-create policy if not exists "table_orders_insert_all" on public.table_orders for insert with check (true);
-create policy if not exists "table_orders_update_all" on public.table_orders for update using (true) with check (true);
-create policy if not exists "table_orders_delete_all" on public.table_orders for delete using (true);
+drop policy if exists "tables_select_all" on public.tables;
+drop policy if exists "tables_insert_all" on public.tables;
+drop policy if exists "tables_update_all" on public.tables;
+drop policy if exists "tables_delete_all" on public.tables;
+create policy "tables_select_all" on public.tables for select to anon, authenticated using (true);
+create policy "tables_insert_all" on public.tables for insert to anon, authenticated with check (true);
+create policy "tables_update_all" on public.tables for update to anon, authenticated using (true) with check (true);
+create policy "tables_delete_all" on public.tables for delete to anon, authenticated using (true);
 
-create policy if not exists "store_settings_select_all" on public.store_settings for select using (true);
-create policy if not exists "store_settings_insert_all" on public.store_settings for insert with check (true);
-create policy if not exists "store_settings_update_all" on public.store_settings for update using (true) with check (true);
-create policy if not exists "store_settings_delete_all" on public.store_settings for delete using (true);
+drop policy if exists "table_orders_select_all" on public.table_orders;
+drop policy if exists "table_orders_insert_all" on public.table_orders;
+drop policy if exists "table_orders_update_all" on public.table_orders;
+drop policy if exists "table_orders_delete_all" on public.table_orders;
+create policy "table_orders_select_all" on public.table_orders for select to anon, authenticated using (true);
+create policy "table_orders_insert_all" on public.table_orders for insert to anon, authenticated with check (true);
+create policy "table_orders_update_all" on public.table_orders for update to anon, authenticated using (true) with check (true);
+create policy "table_orders_delete_all" on public.table_orders for delete to anon, authenticated using (true);
+
+drop policy if exists "store_settings_select_all" on public.store_settings;
+drop policy if exists "store_settings_insert_all" on public.store_settings;
+drop policy if exists "store_settings_update_all" on public.store_settings;
+drop policy if exists "store_settings_delete_all" on public.store_settings;
+create policy "store_settings_select_all" on public.store_settings for select using (true);
+create policy "store_settings_insert_all" on public.store_settings for insert with check (true);
+create policy "store_settings_update_all" on public.store_settings for update using (true) with check (true);
+create policy "store_settings_delete_all" on public.store_settings for delete using (true);
+
+alter table public.sync_queue enable row level security;
+
+drop policy if exists "sync_queue_select_all" on public.sync_queue;
+drop policy if exists "sync_queue_insert_all" on public.sync_queue;
+drop policy if exists "sync_queue_update_all" on public.sync_queue;
+drop policy if exists "sync_queue_delete_all" on public.sync_queue;
+create policy "sync_queue_select_all" on public.sync_queue for select using (true);
+create policy "sync_queue_insert_all" on public.sync_queue for insert with check (true);
+create policy "sync_queue_update_all" on public.sync_queue for update using (true) with check (true);
+create policy "sync_queue_delete_all" on public.sync_queue for delete using (true);

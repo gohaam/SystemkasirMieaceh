@@ -66,6 +66,11 @@ const normalizeSupabaseUuid = (value?: string): string => {
   return isUuid ? value : generateSupabaseUuid();
 };
 
+const isValidSupabaseUuid = (value?: string): boolean => {
+  if (!value) return false;
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+};
+
 const mapSupabaseCategory = (row: any): Category => ({
   id: String(row.id ?? generateSupabaseUuid()),
   name: row.name ?? 'Kategori Baru',
@@ -91,6 +96,19 @@ const mapSupabaseMenuItem = (row: any): MenuItem => ({
   updatedAt: row.updated_at ?? new Date().toISOString(),
 });
 
+const mapSupabaseInventoryItem = (row: any): InventoryItem => ({
+  id: String(row.id ?? generateSupabaseUuid()),
+  name: row.name ?? '',
+  category: row.category ?? 'Bahan Pokok',
+  currentStock: Number(row.current_stock ?? 0),
+  unit: row.unit ?? 'pcs',
+  minStock: Number(row.min_stock ?? 0),
+  costPerUnit: Number(row.cost_per_unit ?? 0),
+  lastRestocked: row.last_restocked ?? row.updated_at ?? new Date().toISOString(),
+  status: row.status === 'low' ? 'low' : row.status === 'out_of_stock' ? 'out_of_stock' : 'safe',
+  supplier: row.supplier ?? '',
+});
+
 const loadCategoriesFromSupabase = async (): Promise<Category[]> => {
   if (!supabase) return [];
 
@@ -113,6 +131,133 @@ const loadMenuItemsFromSupabase = async (): Promise<MenuItem[]> => {
   }
 
   return (data ?? []).map(mapSupabaseMenuItem);
+};
+
+const loadInventoryFromSupabase = async (): Promise<InventoryItem[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase.from('inventory').select('*').order('name', { ascending: true });
+  if (error) {
+    console.error('Gagal memuat stok bahan dari Supabase:', error);
+    return [];
+  }
+
+  return (data ?? []).map(mapSupabaseInventoryItem);
+};
+
+const loadTablesFromSupabase = async (): Promise<TableConfig[]> => {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('tables').select('*').order('table_number', { ascending: true });
+  if (error) throw new Error(error.message || 'Gagal memuat meja dari Supabase');
+  return (data ?? []).map((row: any) => ({
+    id: String(row.id),
+    tableNumber: row.table_number,
+    tableName: row.table_name,
+    location: row.location,
+    capacity: Number(row.capacity ?? 4),
+    status: row.status,
+    activeOrderId: row.active_order_id ?? undefined,
+  }));
+};
+
+const loadTableOrdersFromSupabase = async (): Promise<TableOrder[]> => {
+  if (!supabase) return [];
+  const { data, error } = await supabase.from('table_orders').select('*').order('created_at', { ascending: false });
+  if (error) throw new Error(error.message || 'Gagal memuat pesanan meja dari Supabase');
+  return (data ?? []).map((row: any) => ({
+    id: String(row.id),
+    tableNumber: row.table_number,
+    customerName: row.customer_name,
+    customerPhone: row.customer_phone ?? undefined,
+    items: Array.isArray(row.items_json) ? row.items_json : [],
+    itemCount: Number(row.item_count ?? 0),
+    subtotal: Number(row.subtotal ?? 0),
+    taxAmount: Number(row.tax_amount ?? 0),
+    total: Number(row.total ?? 0),
+    paymentMethod: row.payment_method,
+    paymentStatus: row.payment_status,
+    orderStatus: row.order_status,
+    notes: row.notes ?? undefined,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at ?? undefined,
+    paidAt: row.paid_at ?? undefined,
+    completedAt: row.completed_at ?? undefined,
+  }));
+};
+
+const tablePayload = (table: TableConfig) => ({
+  id: normalizeSupabaseUuid(table.id),
+  table_number: table.tableNumber,
+  table_name: table.tableName,
+  location: table.location,
+  capacity: Number(table.capacity ?? 4),
+  status: table.status,
+  active_order_id: isValidSupabaseUuid(table.activeOrderId) ? table.activeOrderId : null,
+  created_at: new Date().toISOString(),
+});
+
+const tableOrderPayload = (order: TableOrder) => ({
+  id: normalizeSupabaseUuid(order.id),
+  table_number: order.tableNumber,
+  customer_name: order.customerName,
+  customer_phone: order.customerPhone ?? null,
+  items_json: order.items,
+  item_count: Number(order.itemCount ?? 0),
+  subtotal: Number(order.subtotal ?? 0),
+  tax_amount: Number(order.taxAmount ?? 0),
+  total: Number(order.total ?? 0),
+  payment_method: order.paymentMethod,
+  payment_status: order.paymentStatus,
+  order_status: order.orderStatus,
+  notes: order.notes ?? null,
+  created_at: order.createdAt,
+  updated_at: order.updatedAt ?? new Date().toISOString(),
+  paid_at: order.paidAt ?? null,
+  completed_at: order.completedAt ?? null,
+});
+
+const persistTableToSupabase = async (table: TableConfig) => {
+  if (!supabase) return;
+  const { error } = await supabase.from('tables').upsert(tablePayload(table), { onConflict: 'id' });
+  if (error) throw new Error(error.message || 'Gagal menyimpan meja ke Supabase');
+};
+
+const persistTableOrderToSupabase = async (order: TableOrder) => {
+  if (!supabase) return;
+  const { error } = await supabase.from('table_orders').upsert(tableOrderPayload(order), { onConflict: 'id' });
+  if (error) throw new Error(error.message || 'Gagal menyimpan pesanan meja ke Supabase');
+};
+
+const loadSettingsFromSupabase = async (): Promise<StoreSettings | null> => {
+  if (!supabase) return null;
+
+  const { data, error } = await supabase
+    .from('store_settings')
+    .select('settings_json')
+    .eq('id', 'primary_store_config')
+    .maybeSingle();
+
+  if (error) {
+    console.error('Gagal memuat pengaturan dari Supabase:', error);
+    throw new Error(error.message || 'Gagal memuat pengaturan dari Supabase');
+  }
+
+  return data?.settings_json ? (data.settings_json as StoreSettings) : null;
+};
+
+const persistSettingsToSupabase = async (settings: StoreSettings): Promise<void> => {
+  if (!supabase) return;
+
+  const { error } = await supabase.from('store_settings').upsert({
+    id: 'primary_store_config',
+    settings_json: settings,
+    updated_at: new Date().toISOString(),
+  }, { onConflict: 'id' });
+
+  if (error) {
+    console.error('Gagal menyimpan pengaturan ke Supabase:', error);
+    throw new Error(error.message || 'Gagal menyimpan pengaturan ke Supabase');
+  }
 };
 
 const persistCategoryToSupabase = async (category: Category): Promise<void> => {
@@ -164,6 +309,30 @@ const persistMenuItemToSupabase = async (item: MenuItem): Promise<void> => {
   }
 };
 
+const persistInventoryItemToSupabase = async (item: InventoryItem): Promise<void> => {
+  if (!supabase) return;
+
+  const payload = {
+    id: normalizeSupabaseUuid(item.id),
+    name: String(item.name ?? '').trim(),
+    category: item.category || 'Bahan Pokok',
+    current_stock: Number(item.currentStock ?? 0),
+    unit: item.unit || 'pcs',
+    min_stock: Number(item.minStock ?? 0),
+    cost_per_unit: Number(item.costPerUnit ?? 0),
+    last_restocked: item.lastRestocked ?? new Date().toISOString(),
+    status: item.status || 'safe',
+    supplier: item.supplier ?? '',
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase.from('inventory').upsert(payload, { onConflict: 'id' });
+  if (error) {
+    console.error('Gagal menyimpan stok bahan ke Supabase:', error);
+    throw new Error(error.message || 'Gagal menyimpan stok bahan ke Supabase');
+  }
+};
+
 const deleteCategoryFromSupabase = async (id: string): Promise<void> => {
   if (!supabase) return;
 
@@ -181,6 +350,347 @@ const deleteMenuItemFromSupabase = async (id: string): Promise<void> => {
   if (error) {
     console.error('Gagal menghapus menu dari Supabase:', error);
     throw new Error(error.message || 'Gagal menghapus menu dari Supabase');
+  }
+};
+
+const SYNC_QUEUE_KEY = 'mie_aceh_sync_queue_v1';
+const LAST_ONLINE_SNAPSHOT_KEY = 'mie_aceh_last_online_snapshot_v1';
+
+type SyncQueueAction = 'insert' | 'update' | 'delete';
+type SyncQueueEntity = 'users' | 'categories' | 'products' | 'inventory' | 'transactions' | 'store_settings' | 'tables' | 'table_orders';
+
+interface SyncQueueEntry {
+  id: string;
+  entityType: SyncQueueEntity;
+  entityId?: string;
+  action: SyncQueueAction;
+  payload?: Record<string, any>;
+  createdAt: string;
+  updatedAt: string;
+  status: 'pending' | 'failed';
+}
+
+const readSyncQueue = (): SyncQueueEntry[] => {
+  try {
+    const raw = localStorage.getItem(SYNC_QUEUE_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch (error) {
+    console.warn('Gagal membaca sync queue lokal:', error);
+    return [];
+  }
+};
+
+type LastOnlineSnapshot = {
+  categories: Category[];
+  users: User[];
+  menu: MenuItem[];
+  inventory: InventoryItem[];
+  transactions: Transaction[];
+  tables: TableConfig[];
+  tableOrders: TableOrder[];
+};
+
+const readLastOnlineSnapshot = (): LastOnlineSnapshot => {
+  try {
+    const raw = localStorage.getItem(LAST_ONLINE_SNAPSHOT_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return {
+      categories: Array.isArray(parsed.categories) ? parsed.categories : [],
+      users: Array.isArray(parsed.users) ? parsed.users : [],
+      menu: Array.isArray(parsed.menu) ? parsed.menu : [],
+      inventory: Array.isArray(parsed.inventory) ? parsed.inventory : [],
+      transactions: Array.isArray(parsed.transactions) ? parsed.transactions : [],
+      tables: Array.isArray(parsed.tables) ? parsed.tables : [],
+      tableOrders: Array.isArray(parsed.tableOrders) ? parsed.tableOrders : [],
+    };
+  } catch (error) {
+    console.warn('Gagal membaca snapshot data online terakhir:', error);
+    return { categories: [], users: [], menu: [], inventory: [], transactions: [], tables: [], tableOrders: [] };
+  }
+};
+
+const writeLastOnlineSnapshot = (snapshot: Partial<LastOnlineSnapshot>) => {
+  try {
+    localStorage.setItem(LAST_ONLINE_SNAPSHOT_KEY, JSON.stringify({
+      categories: snapshot.categories ?? [],
+      users: snapshot.users ?? [],
+      menu: snapshot.menu ?? [],
+      inventory: snapshot.inventory ?? [],
+      transactions: snapshot.transactions ?? [],
+      tables: snapshot.tables ?? [],
+      tableOrders: snapshot.tableOrders ?? [],
+    }));
+  } catch (error) {
+    console.warn('Gagal menyimpan snapshot data online terakhir:', error);
+  }
+};
+
+async function loadSupabaseDataOrSnapshot<T>(
+  loader: () => Promise<T[]>,
+  snapshotKey: keyof LastOnlineSnapshot,
+  fallback: T[]
+): Promise<T[]> {
+  if (!isSupabaseConfigured) return fallback;
+
+  const isOnline = typeof navigator === 'undefined' || navigator.onLine;
+  if (!isOnline) {
+    const snapshot = readLastOnlineSnapshot();
+    return (snapshot[snapshotKey] as T[]) ?? fallback;
+  }
+
+  try {
+    const data = await loader();
+    const snapshot = readLastOnlineSnapshot();
+    writeLastOnlineSnapshot({ ...snapshot, [snapshotKey]: data });
+    return data;
+  } catch (error) {
+    console.warn(`Gagal memuat data ${String(snapshotKey)} dari Supabase, memakai snapshot lokal terakhir.`, error);
+    const snapshot = readLastOnlineSnapshot();
+    return (snapshot[snapshotKey] as T[]) ?? fallback;
+  }
+}
+
+const writeSyncQueue = (queue: SyncQueueEntry[]) => {
+  localStorage.setItem(SYNC_QUEUE_KEY, JSON.stringify(queue));
+};
+
+const enqueueSyncQueue = (entityType: SyncQueueEntity, action: SyncQueueAction, payload?: Record<string, any>, entityId?: string): void => {
+  const queue = readSyncQueue();
+  const entry: SyncQueueEntry = {
+    id: generateId('sync'),
+    entityType,
+    entityId: entityId ?? payload?.id ?? undefined,
+    action,
+    payload,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    status: 'pending',
+  };
+
+  queue.push(entry);
+  writeSyncQueue(queue);
+};
+
+const flushSyncQueue = async (): Promise<void> => {
+  if (!supabase || typeof navigator !== 'undefined' && !navigator.onLine) return;
+
+  const queue = readSyncQueue();
+  if (!queue.length) return;
+
+  const remaining: SyncQueueEntry[] = [];
+
+  for (const item of queue) {
+    try {
+      const id = item.entityId ?? item.payload?.id;
+      if (!id && item.action !== 'delete') {
+        remaining.push(item);
+        continue;
+      }
+
+      if (item.action === 'delete') {
+        const { error } = await supabase.from(item.entityType).delete().eq('id', id ?? item.entityId ?? item.payload?.id);
+        if (error) {
+          console.error(`Gagal sinkron delete ${item.entityType}:`, error);
+          remaining.push({ ...item, status: 'failed', updatedAt: new Date().toISOString() });
+          continue;
+        }
+        continue;
+      }
+
+      if (item.entityType === 'transactions' && item.payload && item.payload.id) {
+        await persistTransactionToSupabase(item.payload as Transaction);
+        continue;
+      }
+
+      if (item.entityType === 'tables' && item.payload) {
+        await persistTableToSupabase(item.payload as TableConfig);
+        continue;
+      }
+
+      if (item.entityType === 'table_orders' && item.payload) {
+        await persistTableOrderToSupabase(item.payload as TableOrder);
+        continue;
+      }
+
+      const { error } = await supabase.from(item.entityType).upsert(item.payload, { onConflict: 'id' });
+      if (error) {
+        console.error(`Gagal sinkron ${item.entityType}:`, error);
+        remaining.push({ ...item, status: 'failed', updatedAt: new Date().toISOString() });
+        continue;
+      }
+    } catch (error) {
+      console.error('Kesalahan saat memproses sync queue:', error);
+      remaining.push({ ...item, status: 'failed', updatedAt: new Date().toISOString() });
+    }
+  }
+
+  writeSyncQueue(remaining);
+};
+
+const deleteInventoryItemFromSupabase = async (id: string): Promise<void> => {
+  if (!supabase) return;
+
+  const { error } = await supabase.from('inventory').delete().eq('id', id);
+  if (error) {
+    console.error('Gagal menghapus stok bahan dari Supabase:', error);
+    throw new Error(error.message || 'Gagal menghapus stok bahan dari Supabase');
+  }
+};
+
+const mapSupabaseTransaction = (row: any): Transaction => {
+  const items = Array.isArray(row.transaction_items) ? row.transaction_items : [];
+  const normalizedItems: CartItem[] = items.map((item: any, index: number) => ({
+    id: `${row.invoice_number ?? row.id ?? `tx-${index}`}_${item.id ?? index}`,
+    menuId: isValidSupabaseUuid(item.product_id) ? String(item.product_id) : String(item.product_name ?? `menu-${index}`),
+    name: item.product_name ?? 'Menu',
+    price: Number(item.price ?? 0),
+    costPrice: Number(item.cost_price ?? 0),
+    image: DEFAULT_MENU_IMAGE,
+    quantity: Number(item.quantity ?? 1),
+    category: String(item.category ?? ''),
+    options: {
+      cookingStyle: item.cooking_style || undefined,
+      spiceLevel: item.spice_level || undefined,
+      notes: item.notes || undefined,
+    },
+    subtotal: Number(item.subtotal ?? (Number(item.price ?? 0) * Number(item.quantity ?? 1))),
+  }));
+
+  const invoiceNumber = String(row.invoice_number ?? row.id ?? 'INV-UNKNOWN');
+  return {
+    id: invoiceNumber,
+    invoiceNumber,
+    createdAt: row.created_at ?? row.transaction_date ?? new Date().toISOString(),
+    cashierId: String(row.cashier_id ?? 'unknown'),
+    cashierName: row.cashier_name ?? 'Kasir',
+    orderType: (row.order_type as OrderType) ?? 'dine_in',
+    tableNumber: row.table_number ?? undefined,
+    customerName: row.customer_name ?? undefined,
+    items: normalizedItems,
+    itemCount: Number(row.item_count ?? normalizedItems.reduce((sum, item) => sum + item.quantity, 0)),
+    subtotal: Number(row.subtotal ?? 0),
+    discountType: row.discount_type === 'percentage' ? 'percentage' : 'fixed',
+    discountValue: Number(row.discount_value ?? 0),
+    discountAmount: Number(row.discount_amount ?? 0),
+    discountName: row.discount_name ?? undefined,
+    taxRate: Number(row.tax_rate ?? 0),
+    taxAmount: Number(row.tax_amount ?? 0),
+    total: Number(row.total ?? 0),
+    paymentMethod: (row.payment_method as PaymentMethod) ?? 'cash',
+    amountPaid: Number(row.amount_paid ?? row.total ?? 0),
+    changeAmount: Number(row.change_amount ?? 0),
+    paymentReference: row.payment_reference ?? undefined,
+    status: row.status === 'cancelled' ? 'cancelled' : 'completed',
+    notes: row.notes ?? undefined,
+    cancelledAt: row.cancelled_at ?? undefined,
+    cancelReason: row.cancel_reason ?? undefined,
+    cancelledBy: row.cancelled_by ?? undefined,
+  };
+};
+
+const loadTransactionsFromSupabase = async (): Promise<Transaction[]> => {
+  if (!supabase) return [];
+
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*, transaction_items(*)')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Gagal memuat transaksi dari Supabase:', error);
+    return [];
+  }
+
+  return (data ?? []).map(mapSupabaseTransaction);
+};
+
+const persistTransactionToSupabase = async (tx: Transaction): Promise<void> => {
+  if (!supabase) return;
+
+  const transactionId = normalizeSupabaseUuid();
+  const invoiceNumber = String(tx.invoiceNumber || tx.id || generateId('inv'));
+  const transactionPayload = {
+    id: transactionId,
+    invoice_number: invoiceNumber,
+    transaction_date: tx.createdAt,
+    cashier_id: isValidSupabaseUuid(tx.cashierId) ? tx.cashierId : null,
+    cashier_name: tx.cashierName,
+    order_type: tx.orderType,
+    table_number: tx.tableNumber ?? null,
+    customer_name: tx.customerName ?? null,
+    item_count: Number(tx.itemCount ?? tx.items.reduce((total, item) => total + item.quantity, 0)),
+    subtotal: Number(tx.subtotal ?? 0),
+    discount_type: tx.discountType,
+    discount_value: Number(tx.discountValue ?? 0),
+    discount_amount: Number(tx.discountAmount ?? 0),
+    discount_name: tx.discountName ?? null,
+    tax_rate: Number(tx.taxRate ?? 0),
+    tax_amount: Number(tx.taxAmount ?? 0),
+    total: Number(tx.total ?? 0),
+    payment_method: tx.paymentMethod,
+    amount_paid: Number(tx.amountPaid ?? tx.total ?? 0),
+    change_amount: Number(tx.changeAmount ?? 0),
+    payment_reference: tx.paymentReference ?? null,
+    status: tx.status,
+    notes: tx.notes ?? null,
+    created_at: tx.createdAt,
+  };
+
+  const { error: transactionError } = await supabase
+    .from('transactions')
+    .upsert(transactionPayload, { onConflict: 'invoice_number' });
+
+  if (transactionError) {
+    console.error('Gagal menyimpan transaksi ke Supabase:', transactionError);
+    throw new Error(transactionError.message || 'Gagal menyimpan transaksi ke Supabase');
+  }
+
+  const { data: savedTxRows, error: loadTxError } = await supabase
+    .from('transactions')
+    .select('id')
+    .eq('invoice_number', invoiceNumber)
+    .limit(1);
+
+  if (loadTxError || !savedTxRows || savedTxRows.length === 0) {
+    throw new Error('Gagal mengambil transaksi yang baru disimpan untuk item detail.');
+  }
+
+  const savedTxId = savedTxRows[0].id;
+  const transactionItems = tx.items.map((item, index) => ({
+    id: generateSupabaseUuid(),
+    transaction_id: savedTxId,
+    product_id: isValidSupabaseUuid(item.menuId) ? item.menuId : null,
+    product_name: item.name,
+    price: Number(item.price ?? 0),
+    cost_price: Number(item.costPrice ?? 0),
+    quantity: Number(item.quantity ?? 1),
+    category: item.category ?? '',
+    cooking_style: item.options?.cookingStyle ?? '',
+    spice_level: item.options?.spiceLevel ?? '',
+    notes: item.options?.notes ?? '',
+    subtotal: Number(item.subtotal ?? (Number(item.price ?? 0) * Number(item.quantity ?? 1))),
+  }));
+
+  const { error: itemError } = await supabase.from('transaction_items').insert(transactionItems);
+  if (itemError) {
+    console.error('Gagal menyimpan detail transaksi ke Supabase:', itemError);
+    throw new Error(itemError.message || 'Gagal menyimpan detail transaksi ke Supabase');
+  }
+
+  if (isValidSupabaseUuid(tx.cashierId)) {
+    const { data: cashierData, error: cashierLookupError } = await supabase
+      .from('users')
+      .select('total_transactions')
+      .eq('id', tx.cashierId)
+      .limit(1)
+      .single();
+
+    if (!cashierLookupError && cashierData) {
+      await supabase
+        .from('users')
+        .update({ total_transactions: Number(cashierData.total_transactions ?? 0) + 1 })
+        .eq('id', tx.cashierId);
+    }
   }
 };
 
@@ -505,21 +1015,60 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
           ]);
 
         const localUsers = loadedUsers && loadedUsers.length > 0 ? loadedUsers : INITIAL_USERS;
-        const supabaseUsers = isSupabaseConfigured ? await loadUsersFromSupabase() : [];
-        const supabaseCategories = isSupabaseConfigured ? await loadCategoriesFromSupabase() : [];
-        const supabaseMenu = isSupabaseConfigured ? await loadMenuItemsFromSupabase() : [];
-        const finalUsers = isSupabaseConfigured && supabaseUsers.length > 0 ? supabaseUsers : localUsers;
-        const finalCategories = isSupabaseConfigured && supabaseCategories.length > 0 ? supabaseCategories : (loadedCategories && loadedCategories.length > 0 ? loadedCategories : []);
-        const finalMenu = isSupabaseConfigured && supabaseMenu.length > 0 ? supabaseMenu : (loadedMenu && loadedMenu.length > 0 ? loadedMenu : INITIAL_MENU_ITEMS);
+        const supabaseUsers = isSupabaseConfigured ? await loadSupabaseDataOrSnapshot(loadUsersFromSupabase, 'users', localUsers) : localUsers;
+        const supabaseCategories = isSupabaseConfigured
+          ? await loadSupabaseDataOrSnapshot(loadCategoriesFromSupabase, 'categories', loadedCategories && loadedCategories.length > 0 ? loadedCategories : [])
+          : (loadedCategories && loadedCategories.length > 0 ? loadedCategories : []);
+        const supabaseMenu = isSupabaseConfigured
+          ? await loadSupabaseDataOrSnapshot(loadMenuItemsFromSupabase, 'menu', loadedMenu && loadedMenu.length > 0 ? loadedMenu : INITIAL_MENU_ITEMS)
+          : (loadedMenu && loadedMenu.length > 0 ? loadedMenu : INITIAL_MENU_ITEMS);
+        const supabaseInventory = isSupabaseConfigured
+          ? await loadSupabaseDataOrSnapshot(loadInventoryFromSupabase, 'inventory', loadedInv || [])
+          : (loadedInv || []);
+        const supabaseTransactions = isSupabaseConfigured
+          ? await loadSupabaseDataOrSnapshot(loadTransactionsFromSupabase, 'transactions', loadedTx || [])
+          : (loadedTx || []);
+        const supabaseTables = isSupabaseConfigured
+          ? await loadSupabaseDataOrSnapshot(loadTablesFromSupabase, 'tables', loadedTables || [])
+          : (loadedTables || []);
+        const supabaseTableOrders = isSupabaseConfigured
+          ? await loadSupabaseDataOrSnapshot(loadTableOrdersFromSupabase, 'tableOrders', loadedOrders || [])
+          : (loadedOrders || []);
+        let finalSettings = loadedSettings || INITIAL_STORE_SETTINGS;
+        if (isSupabaseConfigured && (typeof navigator === 'undefined' || navigator.onLine)) {
+          try {
+            const remoteSettings = await loadSettingsFromSupabase();
+            if (remoteSettings) finalSettings = remoteSettings;
+          } catch (error) {
+            console.warn('Memakai pengaturan lokal karena Supabase tidak dapat diakses:', error);
+          }
+        }
+        const finalUsers = isSupabaseConfigured ? supabaseUsers : localUsers;
+        const finalCategories = isSupabaseConfigured ? supabaseCategories : (loadedCategories && loadedCategories.length > 0 ? loadedCategories : []);
+        const finalMenu = isSupabaseConfigured ? supabaseMenu : (loadedMenu && loadedMenu.length > 0 ? loadedMenu : INITIAL_MENU_ITEMS);
+        const finalInventory = isSupabaseConfigured ? supabaseInventory : (loadedInv || []);
+        const finalTransactions = isSupabaseConfigured ? supabaseTransactions : (loadedTx || []);
+
+        if (isSupabaseConfigured && (typeof navigator === 'undefined' || navigator.onLine)) {
+          writeLastOnlineSnapshot({
+            categories: finalCategories,
+            users: finalUsers,
+            menu: finalMenu,
+            inventory: finalInventory,
+            transactions: finalTransactions,
+            tables: supabaseTables,
+            tableOrders: supabaseTableOrders,
+          });
+        }
 
         setCategories(finalCategories);
         setUsers(finalUsers);
         setMenuItems(finalMenu);
-        setInventory(loadedInv || []);
-        setTransactions(loadedTx || []);
-        if (loadedSettings) setSettings(loadedSettings);
-        setTables(loadedTables || []);
-        setTableOrders(loadedOrders || []);
+        setInventory(finalInventory);
+        setTransactions(finalTransactions);
+        setSettings(finalSettings);
+        setTables(supabaseTables);
+        setTableOrders(supabaseTableOrders);
 
         setIsDbReady(true);
       } catch (err) {
@@ -538,6 +1087,23 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       localStorage.removeItem(CURRENT_USER_KEY);
     }
   }, [currentUser]);
+
+  useEffect(() => {
+    if (!isSupabaseConfigured || !isDbReady) return;
+
+    const syncWhenOnline = () => {
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        void flushSyncQueue();
+      }
+    };
+
+    window.addEventListener('online', syncWhenOnline);
+    syncWhenOnline();
+
+    return () => {
+      window.removeEventListener('online', syncWhenOnline);
+    };
+  }, [isDbReady]);
 
   // Toast Helper
   const showToast = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
@@ -820,8 +1386,16 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       })
     );
 
-    // 2. Save Transaction to SQLite
-    await sqlite.saveTransaction(newTransaction);
+    // 2. Save Transaction to live DB
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await persistTransactionToSupabase(newTransaction);
+      } else {
+        enqueueSyncQueue('transactions', 'insert', newTransaction, newTransaction.id);
+      }
+    } else {
+      await sqlite.saveTransaction(newTransaction);
+    }
     setTransactions((prev) => [newTransaction, ...prev]);
 
     // 3. Update User stats
@@ -869,12 +1443,32 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       })
     );
 
-    // Void in SQLite
-    await sqlite.cancelTransaction(transactionId, reason, currentUser?.name || 'Admin');
+    // Void in live DB
+    if (isSupabaseConfigured) {
+      const targetTx = transactions.find((t) => t.id === transactionId || t.invoiceNumber === transactionId);
+      if (targetTx) {
+        const { error } = await supabase!
+          .from('transactions')
+          .update({
+            status: 'cancelled',
+            cancelled_at: new Date().toISOString(),
+            cancel_reason: reason,
+            cancelled_by: currentUser?.name || 'Admin',
+          })
+          .eq('invoice_number', targetTx.invoiceNumber);
+
+        if (error) {
+          console.error('Gagal membatalkan transaksi di Supabase:', error);
+          throw new Error(error.message || 'Gagal membatalkan transaksi di Supabase');
+        }
+      }
+    } else {
+      await sqlite.cancelTransaction(transactionId, reason, currentUser?.name || 'Admin');
+    }
 
     setTransactions((prev) =>
       prev.map((t) =>
-        t.id === transactionId
+        t.id === transactionId || t.invoiceNumber === transactionId
           ? {
               ...t,
               status: 'cancelled',
@@ -899,7 +1493,16 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     if (isSupabaseConfigured) {
-      await persistCategoryToSupabase(newCategory);
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await persistCategoryToSupabase(newCategory);
+      } else {
+        enqueueSyncQueue('categories', 'insert', {
+          id: newCategory.id,
+          name: newCategory.name,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        });
+      }
       setCategories((prev) => {
         const exists = prev.some((item) => item.id === newCategory.id);
         return exists ? prev.map((item) => (item.id === newCategory.id ? newCategory : item)) : [...prev, newCategory];
@@ -924,7 +1527,16 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     const updated = { ...existing, ...updates, id: normalizeSupabaseUuid(existing.id) };
 
     if (isSupabaseConfigured) {
-      await persistCategoryToSupabase(updated);
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await persistCategoryToSupabase(updated);
+      } else {
+        enqueueSyncQueue('categories', 'update', {
+          id: updated.id,
+          name: updated.name,
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }, updated.id);
+      }
       setCategories((prev) => prev.map((c) => (c.id === id ? updated : c)));
       showToast('Kategori berhasil diperbarui', 'success');
       return;
@@ -949,7 +1561,11 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     }
 
     if (isSupabaseConfigured) {
-      await deleteCategoryFromSupabase(id);
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await deleteCategoryFromSupabase(id);
+      } else {
+        enqueueSyncQueue('categories', 'delete', { id }, id);
+      }
       setCategories((prev) => prev.filter((c) => c.id !== id));
       showToast('Kategori berhasil dihapus', 'info');
       return;
@@ -970,7 +1586,27 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     if (isSupabaseConfigured) {
-      await persistMenuItemToSupabase(newItem);
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await persistMenuItemToSupabase(newItem);
+      } else {
+        enqueueSyncQueue('products', 'insert', {
+          id: newItem.id,
+          name: newItem.name,
+          category: newItem.category,
+          price: Number(newItem.price ?? 0),
+          cost_price: Number(newItem.costPrice ?? 0),
+          stock: Number(newItem.stock ?? 0),
+          unit: newItem.unit || 'Porsi',
+          description: newItem.description || '',
+          image: newItem.image || DEFAULT_MENU_IMAGE,
+          is_active: Boolean(newItem.isAvailable),
+          is_popular: Boolean(newItem.isPopular),
+          spicy_options: Number(Boolean(newItem.spicyOptions)),
+          cooking_style_options: Number(Boolean(newItem.cookingStyleOptions)),
+          created_at: newItem.createdAt,
+          updated_at: newItem.updatedAt,
+        }, newItem.id);
+      }
       setMenuItems((prev) => [newItem, ...prev]);
       showToast(`Menu ${newItem.name} berhasil ditambahkan!`, 'success');
       return;
@@ -992,7 +1628,27 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     };
 
     if (isSupabaseConfigured) {
-      await persistMenuItemToSupabase(updated);
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await persistMenuItemToSupabase(updated);
+      } else {
+        enqueueSyncQueue('products', 'update', {
+          id: updated.id,
+          name: updated.name,
+          category: updated.category,
+          price: Number(updated.price ?? 0),
+          cost_price: Number(updated.costPrice ?? 0),
+          stock: Number(updated.stock ?? 0),
+          unit: updated.unit || 'Porsi',
+          description: updated.description || '',
+          image: updated.image || DEFAULT_MENU_IMAGE,
+          is_active: Boolean(updated.isAvailable),
+          is_popular: Boolean(updated.isPopular),
+          spicy_options: Number(Boolean(updated.spicyOptions)),
+          cooking_style_options: Number(Boolean(updated.cookingStyleOptions)),
+          created_at: updated.createdAt,
+          updated_at: updated.updatedAt,
+        }, updated.id);
+      }
       setMenuItems((prev) => prev.map((item) => (item.id === id ? updated : item)));
       showToast('Menu berhasil diperbarui', 'success');
       return;
@@ -1005,7 +1661,11 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
   const deleteMenuItem = async (id: string) => {
     if (isSupabaseConfigured) {
-      await deleteMenuItemFromSupabase(id);
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await deleteMenuItemFromSupabase(id);
+      } else {
+        enqueueSyncQueue('products', 'delete', { id }, id);
+      }
       setMenuItems((prev) => prev.filter((item) => item.id !== id));
       showToast('Menu berhasil dihapus', 'info');
       return;
@@ -1038,8 +1698,32 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addInventoryItem = async (item: Omit<InventoryItem, 'id'>) => {
     const newItem: InventoryItem = {
       ...item,
-      id: generateId('inv'),
+      id: normalizeSupabaseUuid(),
     };
+
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await persistInventoryItemToSupabase(newItem);
+      } else {
+        enqueueSyncQueue('inventory', 'insert', {
+          id: newItem.id,
+          name: newItem.name,
+          category: newItem.category || 'Bahan Pokok',
+          current_stock: Number(newItem.currentStock ?? 0),
+          unit: newItem.unit || 'pcs',
+          min_stock: Number(newItem.minStock ?? 0),
+          cost_per_unit: Number(newItem.costPerUnit ?? 0),
+          last_restocked: newItem.lastRestocked || new Date().toISOString(),
+          status: newItem.status || 'safe',
+          supplier: newItem.supplier ?? '',
+          updated_at: new Date().toISOString(),
+        }, newItem.id);
+      }
+      setInventory((prev) => [...prev, newItem]);
+      showToast(`Bahan ${newItem.name} berhasil ditambahkan!`, 'success');
+      return;
+    }
+
     await sqlite.saveInventoryItem(newItem);
     setInventory((prev) => [...prev, newItem]);
     showToast(`Bahan ${newItem.name} berhasil ditambahkan!`, 'success');
@@ -1048,7 +1732,31 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateInventoryItem = async (id: string, updates: Partial<InventoryItem>) => {
     const existing = inventory.find((i) => i.id === id);
     if (!existing) return;
-    const updated = { ...existing, ...updates };
+    const updated = { ...existing, ...updates, id: normalizeSupabaseUuid(existing.id) };
+
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await persistInventoryItemToSupabase(updated);
+      } else {
+        enqueueSyncQueue('inventory', 'update', {
+          id: updated.id,
+          name: updated.name,
+          category: updated.category || 'Bahan Pokok',
+          current_stock: Number(updated.currentStock ?? 0),
+          unit: updated.unit || 'pcs',
+          min_stock: Number(updated.minStock ?? 0),
+          cost_per_unit: Number(updated.costPerUnit ?? 0),
+          last_restocked: updated.lastRestocked || new Date().toISOString(),
+          status: updated.status || 'safe',
+          supplier: updated.supplier ?? '',
+          updated_at: new Date().toISOString(),
+        }, updated.id);
+      }
+      setInventory((prev) => prev.map((item) => (item.id === id ? updated : item)));
+      showToast('Data stok berhasil diperbarui', 'success');
+      return;
+    }
+
     await sqlite.saveInventoryItem(updated);
     setInventory((prev) => prev.map((item) => (item.id === id ? updated : item)));
     showToast('Data stok berhasil diperbarui', 'success');
@@ -1066,13 +1774,49 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       currentStock: newStock,
       status,
       lastRestocked: new Date().toISOString(),
+      id: normalizeSupabaseUuid(existing.id),
     };
+
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await persistInventoryItemToSupabase(updated);
+      } else {
+        enqueueSyncQueue('inventory', 'update', {
+          id: updated.id,
+          name: updated.name,
+          category: updated.category || 'Bahan Pokok',
+          current_stock: Number(updated.currentStock ?? 0),
+          unit: updated.unit || 'pcs',
+          min_stock: Number(updated.minStock ?? 0),
+          cost_per_unit: Number(updated.costPerUnit ?? 0),
+          last_restocked: updated.lastRestocked || new Date().toISOString(),
+          status: updated.status || 'safe',
+          supplier: updated.supplier ?? '',
+          updated_at: new Date().toISOString(),
+        }, updated.id);
+      }
+      setInventory((prev) => prev.map((item) => (item.id === id ? updated : item)));
+      showToast('Penyesuaian stok berhasil disimpan', 'success');
+      return;
+    }
+
     await sqlite.saveInventoryItem(updated);
     setInventory((prev) => prev.map((item) => (item.id === id ? updated : item)));
     showToast('Penyesuaian stok berhasil disimpan', 'success');
   };
 
   const deleteInventoryItem = async (id: string) => {
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await deleteInventoryItemFromSupabase(id);
+      } else {
+        enqueueSyncQueue('inventory', 'delete', { id }, id);
+      }
+      setInventory((prev) => prev.filter((item) => item.id !== id));
+      showToast('Item bahan berhasil dihapus', 'info');
+      return;
+    }
+
     await sqlite.deleteInventoryItem(id);
     setInventory((prev) => prev.filter((item) => item.id !== id));
     showToast('Item bahan berhasil dihapus', 'info');
@@ -1088,9 +1832,13 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const addTable = async (tableData: Omit<TableConfig, 'id'>) => {
     const newTable: TableConfig = {
       ...tableData,
-      id: generateId('tbl'),
+      id: normalizeSupabaseUuid(),
     };
     await sqlite.saveTable(newTable);
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) await persistTableToSupabase(newTable);
+      else enqueueSyncQueue('tables', 'insert', tablePayload(newTable), newTable.id);
+    }
     setTables((prev) => [...prev, newTable]);
     showToast(`Meja ${newTable.tableNumber} berhasil ditambahkan!`, 'success');
   };
@@ -1100,20 +1848,28 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (!existing) return;
     const updated = { ...existing, ...updates };
     await sqlite.saveTable(updated);
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) await persistTableToSupabase(updated);
+      else enqueueSyncQueue('tables', 'update', tablePayload(updated), updated.id);
+    }
     setTables((prev) => prev.map((t) => (t.id === id ? updated : t)));
     showToast('Data meja berhasil diperbarui', 'success');
   };
 
   const deleteTable = async (id: string) => {
     await sqlite.deleteTable(id);
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        const { error } = await supabase!.from('tables').delete().eq('id', id);
+        if (error) throw new Error(error.message || 'Gagal menghapus meja dari Supabase');
+      } else enqueueSyncQueue('tables', 'delete', { id }, id);
+    }
     setTables((prev) => prev.filter((t) => t.id !== id));
     showToast('Meja berhasil dihapus', 'info');
   };
 
   const addTableOrder = async (orderData: Omit<TableOrder, 'id' | 'createdAt'>): Promise<TableOrder> => {
-    const randomSuffix = Math.floor(1000 + Math.random() * 9000);
-    const tableClean = orderData.tableNumber.replace(/\s+/g, '').toUpperCase();
-    const orderId = `ORD-${tableClean}-${randomSuffix}`;
+    const orderId = normalizeSupabaseUuid();
 
     const newOrder: TableOrder = {
       ...orderData,
@@ -1126,6 +1882,10 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (tbl) {
       const updatedTbl = { ...tbl, status: 'occupied' as const, activeOrderId: orderId };
       await sqlite.saveTable(updatedTbl);
+      if (isSupabaseConfigured) {
+        if (typeof navigator === 'undefined' || navigator.onLine) await persistTableToSupabase(updatedTbl);
+        else enqueueSyncQueue('tables', 'update', tablePayload(updatedTbl), updatedTbl.id);
+      }
       setTables((prev) => prev.map((t) => (t.id === tbl.id ? updatedTbl : t)));
     }
 
@@ -1151,6 +1911,10 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
 
     // 3. Save to SQLite
     await sqlite.saveTableOrder(newOrder);
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) await persistTableOrderToSupabase(newOrder);
+      else enqueueSyncQueue('table_orders', 'insert', tableOrderPayload(newOrder), newOrder.id);
+    }
     setTableOrders((prev) => [newOrder, ...prev]);
 
     showToast(`Pesanan ${orderId} dari ${orderData.tableNumber} berhasil disimpan!`, 'success');
@@ -1168,6 +1932,10 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       completedAt: isDone ? new Date().toISOString() : existing.completedAt,
     };
     await sqlite.saveTableOrder(updated);
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) await persistTableOrderToSupabase(updated);
+      else enqueueSyncQueue('table_orders', 'update', tableOrderPayload(updated), updated.id);
+    }
     setTableOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)));
     showToast(`Status pesanan ${orderId} diperbarui: ${status.toUpperCase()}`, 'info');
   };
@@ -1182,6 +1950,10 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updatedAt: new Date().toISOString(),
     };
     await sqlite.saveTableOrder(updated);
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) await persistTableOrderToSupabase(updated);
+      else enqueueSyncQueue('table_orders', 'update', tableOrderPayload(updated), updated.id);
+    }
     setTableOrders((prev) => prev.map((o) => (o.id === orderId ? updated : o)));
     showToast(`Status pembayaran pesanan ${orderId} diperbarui`, 'success');
   };
@@ -1226,8 +1998,12 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       notes: order.notes ? `[Pesanan QR Meja] ${order.notes}` : '[Pesanan QR Meja]',
     };
 
-    // Save transaction to SQLite
+    // Save transaction locally and remotely when available
     await sqlite.saveTransaction(newTransaction);
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) await persistTransactionToSupabase(newTransaction);
+      else enqueueSyncQueue('transactions', 'insert', newTransaction, newTransaction.id);
+    }
     setTransactions((prev) => [newTransaction, ...prev]);
 
     // Mark table order completed
@@ -1239,6 +2015,10 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       paidAt: new Date().toISOString(),
     };
     await sqlite.saveTableOrder(updatedOrder);
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) await persistTableOrderToSupabase(updatedOrder);
+      else enqueueSyncQueue('table_orders', 'update', tableOrderPayload(updatedOrder), updatedOrder.id);
+    }
     setTableOrders((prev) => prev.map((o) => (o.id === orderId ? updatedOrder : o)));
 
     // Free table
@@ -1246,6 +2026,10 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
     if (tbl) {
       const updatedTbl: TableConfig = { ...tbl, status: 'available', activeOrderId: undefined };
       await sqlite.saveTable(updatedTbl);
+      if (isSupabaseConfigured) {
+        if (typeof navigator === 'undefined' || navigator.onLine) await persistTableToSupabase(updatedTbl);
+        else enqueueSyncQueue('tables', 'update', tablePayload(updatedTbl), updatedTbl.id);
+      }
       setTables((prev) => prev.map((t) => (t.id === tbl.id ? updatedTbl : t)));
     }
 
@@ -1297,6 +2081,10 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
       updatedAt: new Date().toISOString(),
     };
     await sqlite.saveTableOrder(updatedOrder);
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) await persistTableOrderToSupabase(updatedOrder);
+      else enqueueSyncQueue('table_orders', 'update', tableOrderPayload(updatedOrder), updatedOrder.id);
+    }
     setTableOrders((prev) => prev.map((o) => (o.id === orderId ? updatedOrder : o)));
 
     showToast(`Pesanan ${orderId} berhasil dibatalkan.`, 'info');
@@ -1396,8 +2184,21 @@ export const POSProvider: React.FC<{ children: ReactNode }> = ({ children }) => 
   const updateSettings = async (newSettings: Partial<StoreSettings>) => {
     const updated = { ...settings, ...newSettings };
     await sqlite.saveSettings(updated);
+    if (isSupabaseConfigured) {
+      if (typeof navigator === 'undefined' || navigator.onLine) {
+        await persistSettingsToSupabase(updated);
+      } else {
+        enqueueSyncQueue('store_settings', 'update', {
+          id: 'primary_store_config',
+          settings_json: updated,
+          updated_at: new Date().toISOString(),
+        }, 'primary_store_config');
+      }
+    }
     setSettings(updated);
-    showToast('Pengaturan warung berhasil disimpan!', 'success');
+    showToast(isSupabaseConfigured && (typeof navigator === 'undefined' || navigator.onLine)
+      ? 'Pengaturan warung berhasil disimpan ke Supabase!'
+      : 'Pengaturan warung disimpan lokal dan menunggu sinkronisasi.', 'success');
   };
 
   const resetAllData = async () => {

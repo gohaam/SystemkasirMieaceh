@@ -19,26 +19,45 @@
 }
 
 /* Custom Print Styles for Thermal Struk Receipt */
+@page {
+  size: 80mm auto;
+  margin: 0;
+}
+
 @media print {
+  body {
+    background: white !important;
+  }
+
   body * {
     visibility: hidden;
   }
+
   #printable-receipt, #printable-receipt * {
     visibility: visible;
   }
+
   #printable-receipt {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100% !important;
+    position: static !important;
+    display: block !important;
+    width: 80mm !important;
     max-width: 80mm !important;
+    min-width: 80mm !important;
     margin: 0 !important;
-    padding: 10px !important;
+    padding: 8px !important;
     box-shadow: none !important;
     border: none !important;
-    font-size: 11px !important;
+    border-radius: 0 !important;
+    font-size: 10px !important;
+    line-height: 1.5 !important;
     background: white !important;
     color: black !important;
+    overflow: visible !important;
+    word-break: break-word;
+  }
+
+  #printable-receipt > * {
+    max-width: 100% !important;
   }
 }
 

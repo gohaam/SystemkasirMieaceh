@@ -126,30 +126,34 @@ export const TableQRView: React.FC = () => {
     setIsTableFormOpen(true);
   };
 
-  const handleSaveTableForm = (e: React.FormEvent) => {
+  const handleSaveTableForm = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formTableNumber.trim()) {
       showToast('Nomor meja wajib diisi', 'error');
       return;
     }
 
-    if (editingTable) {
-      updateTable(editingTable.id, {
-        tableNumber: formTableNumber.trim(),
-        tableName: formTableName.trim(),
-        location: formLocation,
-        capacity: formCapacity,
-      });
-    } else {
-      addTable({
-        tableNumber: formTableNumber.trim(),
-        tableName: formTableName.trim(),
-        location: formLocation,
-        capacity: formCapacity,
-        status: 'available',
-      });
+    try {
+      if (editingTable) {
+        await updateTable(editingTable.id, {
+          tableNumber: formTableNumber.trim(),
+          tableName: formTableName.trim(),
+          location: formLocation,
+          capacity: formCapacity,
+        });
+      } else {
+        await addTable({
+          tableNumber: formTableNumber.trim(),
+          tableName: formTableName.trim(),
+          location: formLocation,
+          capacity: formCapacity,
+          status: 'available',
+        });
+      }
+      setIsTableFormOpen(false);
+    } catch (error: any) {
+      showToast(error?.message || 'Meja gagal disimpan. Periksa koneksi dan policy Supabase.', 'error');
     }
-    setIsTableFormOpen(false);
   };
 
   return (
